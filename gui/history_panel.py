@@ -116,7 +116,7 @@ class HistoryPanel(QWidget):
             return
 
         try:
-            sessions = self.db_manager.get_all_sessions(limit=100)
+            sessions = self.db_manager.list_sessions()
             self._populate_table(sessions)
             self.info_label.setText(
                 f'{len(sessions)} session(s) found.'
@@ -125,17 +125,23 @@ class HistoryPanel(QWidget):
             logger.warning('Could not load sessions: %s', exc)
             self.info_label.setText('Could not load session history.')
 
-    def _populate_table(self, sessions: List[Dict[str, Any]]):
+    def _populate_table(self, sessions: List[Any]):
         """Fill the sessions table."""
         self.sessions_table.setRowCount(len(sessions))
 
         for row, session in enumerate(sessions):
+            # Fetch dataset name
+            dataset_name = 'Unknown'
+            dataset = self.db_manager.get_dataset(session.dataset_id)
+            if dataset:
+                dataset_name = dataset.filename
+
             items = [
-                str(session.get('session_id', '')),
-                session.get('dataset_name', ''),
-                str(session.get('started_on', '')),
-                session.get('status', ''),
-                str(session.get('findings_count', 0)),
+                str(session.session_id),
+                dataset_name,
+                str(session.started_on),
+                session.status,
+                str(session.findings_count),
             ]
 
             for col, val in enumerate(items):

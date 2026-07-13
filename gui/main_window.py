@@ -150,7 +150,6 @@ class MainWindow(QMainWindow):
         self._setup_sidebar()
         self._setup_content_area()
         self._setup_status_bar()
-        self._setup_shortcuts()
         self._setup_menu_bar()
 
         logger.info('Main window initialized.')
@@ -282,16 +281,6 @@ class MainWindow(QMainWindow):
         self.status_bar.addWidget(self.status_dataset_label, 1)
         self.status_bar.addWidget(self.status_row_label)
         self.status_bar.addPermanentWidget(self.status_timestamp_label)
-
-    def _setup_shortcuts(self):
-        """Set up keyboard shortcuts (FR-087)."""
-        # Ctrl+O: Import
-        import_shortcut = QShortcut(QKeySequence('Ctrl+O'), self)
-        import_shortcut.activated.connect(lambda: self._switch_panel(0))
-
-        # Ctrl+E: Export Report
-        export_shortcut = QShortcut(QKeySequence('Ctrl+E'), self)
-        export_shortcut.activated.connect(self._export_report)
 
     def _setup_menu_bar(self):
         """Build the menu bar with File and Help menus."""
