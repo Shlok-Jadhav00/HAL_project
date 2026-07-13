@@ -1,0 +1,90 @@
+{
+  "schema_version": "1.0",
+  "rules": [
+    {
+      "rule_id": "RULE-001",
+      "rule_name": "Critical Threshold Breach - Engine Temperature",
+      "is_enabled": true,
+      "scope_pattern": "Engine_Temp*",
+      "condition": {
+        "metric": "raw_value",
+        "operator": ">",
+        "value": 120
+      },
+      "conclusion_text": "Engine temperature exceeded the critical safety threshold of 120°C.",
+      "recommendation_text": "Immediately inspect the cooling system and sensor calibration for the affected channel.",
+      "severity": "Critical"
+    },
+    {
+      "rule_id": "RULE-002",
+      "rule_name": "Sustained Upward Drift",
+      "is_enabled": true,
+      "scope_pattern": "*",
+      "condition": {
+        "metric": "trend_slope",
+        "operator": ">",
+        "value": 0.05
+      },
+      "conclusion_text": "This channel shows a sustained upward drift over the recorded samples.",
+      "recommendation_text": "Schedule a calibration check to rule out sensor drift before the trend approaches operational limits.",
+      "severity": "Warning"
+    },
+    {
+      "rule_id": "RULE-003",
+      "rule_name": "High Variance Instability",
+      "is_enabled": true,
+      "scope_pattern": "*",
+      "condition": {
+        "metric": "coefficient_of_variation",
+        "operator": ">",
+        "value": 0.15
+      },
+      "conclusion_text": "This channel shows unusually high variability relative to its average value, indicating possible instability.",
+      "recommendation_text": "Cross-check this channel against related sensors for a common root cause.",
+      "severity": "Warning"
+    },
+    {
+      "rule_id": "RULE-004",
+      "rule_name": "Repeated Threshold Breach",
+      "is_enabled": true,
+      "scope_pattern": "*",
+      "condition": {
+        "metric": "anomaly_count",
+        "method_filter": "ThresholdBreach",
+        "operator": ">=",
+        "value": 2
+      },
+      "conclusion_text": "Multiple threshold breaches were detected for this channel, suggesting a recurring rather than one-off issue.",
+      "recommendation_text": "Treat this as a priority investigation item rather than an isolated event.",
+      "severity": "Critical"
+    },
+    {
+      "rule_id": "RULE-005",
+      "rule_name": "Strong Correlated Channels",
+      "is_enabled": true,
+      "scope_pattern": "*",
+      "condition": {
+        "metric": "correlation",
+        "operator": ">",
+        "value": 0.7
+      },
+      "conclusion_text": "Two channels are strongly correlated, which may indicate a shared physical cause or sensor dependency.",
+      "recommendation_text": "Consider whether one channel could serve as an early-warning proxy for the other.",
+      "severity": "Info"
+    },
+    {
+      "rule_id": "RULE-006",
+      "rule_name": "Multivariate Anomaly Cluster",
+      "is_enabled": true,
+      "scope_pattern": "*",
+      "condition": {
+        "metric": "isolation_forest_flag",
+        "operator": "==",
+        "value": true
+      },
+      "conclusion_text": "This row's combination of values across multiple channels does not resemble normal operation, even though no single value looks extreme.",
+      "recommendation_text": "Review this specific timestamp/sample manually — combined-channel anomalies often indicate sensor cross-talk or a transient event.",
+      "severity": "Warning"
+    }
+  ]
+}

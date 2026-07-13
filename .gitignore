@@ -1,0 +1,29 @@
+# Environments
+.venv/
+env/
+venv/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*.class
+*.so
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Pytest / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# App Data & Logs
+*.log
+.gemini/
+
+# OS Files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,43 @@
+{
+    "app":  {
+                "version":  "0.1.0"
+            },
+    "detection":  {
+                      "zscore_threshold":  3.0,
+                      "iqr_multiplier":  1.5,
+                      "isolation_forest_contamination":  0.05,
+                      "isolation_forest_n_estimators":  100,
+                      "isolation_forest_random_state":  42
+                  },
+    "statistics":  {
+                       "correlation_threshold":  0.7,
+                       "trend_window_min_samples":  3,
+                       "trend_window_max_samples":  20,
+                       "trend_window_fraction_of_dataset":  0.1,
+                       "trend_stability_std_multiplier":  0.5,
+                       "trend_minimum_slope_magnitude":  0.01
+                   },
+    "preprocessing":  {
+                          "default_numeric_fill_constant":  0,
+                          "default_categorical_fill_constant":  "Unknown"
+                      },
+    "paths":  {
+                  "default_report_folder":  "%APPDATA%\\AEIA\\reports",
+                  "rule_file_path":  "%APPDATA%\\AEIA\\rules\\engineering_rules.json",
+                  "database_path":  "%APPDATA%\\AEIA\\database\\aeia.db"
+              },
+    "ui":  {
+               "theme":  "default",
+               "window_width":  1440,
+               "window_height":  900,
+               "window_min_width":  1280,
+               "window_min_height":  800,
+               "sidebar_width":  220,
+               "sidebar_collapsed_width":  60
+           },
+    "report":  {
+                   "include_charts_by_default":  true,
+                   "page_size":  "A4",
+                   "margin_cm":  2
+               }
+}

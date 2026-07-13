@@ -1,0 +1,20 @@
+=== Statistical Summary ===
+Column,Mean,Median,Mode,Std Dev,Variance,Min,Max,Q1,Q3,IQR,Trend Slope,Trend Direction
+Engine_Temp_C,91.7507,91.0800,88.8000,5.9313,35.1803,86.8500,134.5000,89.7350,92.7525,3.0175,0.1383,Increasing
+Oil_Pressure_psi,39.6514,39.6257,38.4800,1.6187,2.6203,36.1200,43.1400,38.5375,40.8725,2.3350,-0.0056,Stable
+RPM,2495.3433,2494.4500,2463.8000,19.2550,370.7540,2456.8000,2540.0000,2484.7000,2511.2500,26.5500,-0.0269,Stable
+Vibration_mm_s,0.2557,0.2470,0.2450,0.0565,0.0032,0.1860,0.6200,0.2288,0.2690,0.0403,-0.0004,Stable
+
+=== Anomalies ===
+Column,Row,Method,Severity,Value
+Engine_Temp_C,44,ZScore,Warning,134.5000
+Vibration_mm_s,29,ZScore,Warning,0.6200
+Engine_Temp_C,44,IQR,Warning,134.5000
+Vibration_mm_s,29,IQR,Warning,0.6200
+"Engine_Temp_C,Oil_Pressure_psi,RPM,Vibration_mm_s",29,IsolationForest,Warning,N/A
+"Engine_Temp_C,Oil_Pressure_psi,RPM,Vibration_mm_s",44,IsolationForest,Warning,N/A
+"Engine_Temp_C,Oil_Pressure_psi,RPM,Vibration_mm_s",58,IsolationForest,Warning,N/A
+
+=== Strong Correlations ===
+Column A,Column B,r-value
+Oil_Pressure_psi,RPM,0.9336
