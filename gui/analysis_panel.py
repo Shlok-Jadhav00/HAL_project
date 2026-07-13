@@ -327,10 +327,12 @@ class AnalysisPanel(QWidget):
             if self.db_manager:
                 sid = self.session_data.get('session_id')
                 if sid:
+                    insights_dict = results.get('insights', {})
+                    all_insights = insights_dict.get('all_insights', [])
                     self.db_manager.update_session(
                         session_id=sid,
                         status='Completed',
-                        findings_count=len(results.get('insights', []))
+                        findings_count=len(all_insights)
                     )
 
         self._populate_statistics(results['statistics'])

@@ -215,9 +215,22 @@ class HistoryPanel(QWidget):
     def _open_session(self, session_id: int):
         """Open a past session's findings (FR-100)."""
         logger.info('Opening session %d', session_id)
-        # FUTURE SCOPE (v2.0): Integrate with main window to fully reload session results
-        QMessageBox.information(
-            self, 'Open Session',
-            f'Session {session_id} would be loaded here. '
-            f'(Full re-open integration pending GUI shell completion.)'
-        )
+        if not self.db_manager:
+            return
+
+        reports = self.db_manager.get_reports(session_id)
+        if reports:
+            # Open the most recently generated report
+            latest_report = reports[0]
+            try:
+                import os
+                os.startfile(latest_report.file_path)
+            except Exception as e:
+                logger.error("Could not open report: %s", e)
+                QMessageBox.warning(self, "Error", f"Could not open the report PDF:\n{e}")
+        else:
+            QMessageBox.information(
+                self, 'Open Session',
+                f'Session {session_id} has no exported report yet. '
+                f'(Full re-open integration pending GUI shell completion.)'
+            )
