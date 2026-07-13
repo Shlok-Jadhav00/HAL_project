@@ -306,6 +306,13 @@ class MainWindow(QMainWindow):
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
+        # Help menu (FR-089)
+        help_menu = menubar.addMenu('&Help')
+
+        about_action = QAction('&About AEIA', self)
+        about_action.triggered.connect(self._show_about)
+        help_menu.addAction(about_action)
+
     def keyPressEvent(self, event):
         """Handle global keyboard shortcuts directly (FR-087)."""
         if event.modifiers() == Qt.ControlModifier:
@@ -318,13 +325,6 @@ class MainWindow(QMainWindow):
                 event.accept()
                 return
         super().keyPressEvent(event)
-
-        # Help menu (FR-089)
-        help_menu = menubar.addMenu('&Help')
-
-        about_action = QAction('&About AEIA', self)
-        about_action.triggered.connect(self._show_about)
-        help_menu.addAction(about_action)
 
     # -------------------------------------------------------------------
     # Panel switching
