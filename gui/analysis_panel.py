@@ -26,6 +26,7 @@ from gui.theme import (
     GRAPHITE, MODULE_COLORS, MUTED_SLATE, PANEL_WHITE,
     SEVERITY_BG_COLORS, SEVERITY_COLORS,
 )
+from gui.report_panel import ReportPanel
 
 logger = logging.getLogger('aeia.analysis_panel')
 
@@ -250,6 +251,10 @@ class AnalysisPanel(QWidget):
         self.graphs_scroll.setWidget(self.graphs_widget)
         self.results_tabs.addTab(self.graphs_scroll, '📈 Graphs')
 
+        # Tab: Report Export
+        self.report_panel = ReportPanel()
+        self.results_tabs.addTab(self.report_panel, '📑 Export Report')
+
         # Placeholder when no data
         self._show_placeholder()
 
@@ -298,10 +303,12 @@ class AnalysisPanel(QWidget):
         self._populate_statistics(results['statistics'])
         self._populate_anomalies(results['anomalies'])
         self._populate_findings(results['insights'])
-        self._populate_conclusion(results['conclusion'],
-                                   results['recommendations'])
-        self._populate_graphs(results.get('chart_bytes', {}))
-
+        self._populate_conclusion(results['conclusion'], results['recommendations'])
+        self._populate_graphs(results['chart_bytes'])
+        
+        # Pass to report panel
+        self.report_panel.set_results(results)
+        
         logger.info('Analysis results displayed.')
 
     def _on_analysis_error(self, error_msg: str):

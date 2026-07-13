@@ -162,24 +162,14 @@ class ReportPanel(QWidget):
         ).get('filename', 'report')
         session_id = 1  # Will be set from session context
 
-        import sys
         import os
-        from pathlib import Path
+        from core.config_manager import get_reports_path
         
-        # Determine base directory (next to .exe when packaged, or project root in dev)
-        if getattr(sys, 'frozen', False):
-            base_dir = Path(sys.executable).parent
-        else:
-            base_dir = Path(os.path.dirname(os.path.abspath(__file__))).parent
-            
-        reports_dir = base_dir / 'reports'
-        try:
-            reports_dir.mkdir(exist_ok=True)
-        except OSError:
-            pass # Fall back to current directory if permissions fail
+        reports_dir = get_reports_path()
+        os.makedirs(reports_dir, exist_ok=True)
             
         default_name = generate_report_filename(dataset_name, session_id, fmt)
-        default_path = str(reports_dir / default_name) if reports_dir.exists() else default_name
+        default_path = os.path.join(reports_dir, default_name)
 
         if fmt == 'pdf':
             file_filter = 'PDF Files (*.pdf);;All Files (*)'

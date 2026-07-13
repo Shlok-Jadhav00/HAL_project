@@ -417,10 +417,18 @@ class MainWindow(QMainWindow):
             )
             return
 
+        from core.config_manager import get_reports_path
+        import os
+        
         # Ask for save location (FR-075)
+        reports_dir = get_reports_path()
+        os.makedirs(reports_dir, exist_ok=True)
+        
         default_name = f'AEIA_Report_S{self.current_session_id:05d}.pdf'
+        default_path = os.path.join(reports_dir, default_name)
+        
         file_path, _ = QFileDialog.getSaveFileName(
-            self, 'Save Report', default_name,
+            self, 'Save Report', default_path,
             'PDF Files (*.pdf);;CSV Files (*.csv);;All Files (*)'
         )
 
@@ -432,7 +440,7 @@ class MainWindow(QMainWindow):
                 generate_pdf_report, generate_csv_export,
             )
             from core.chart_builder import (
-                generate_all_charts, save_figure_to_bytes,
+                generate_all_charts,
             )
 
             if file_path.lower().endswith('.csv'):
@@ -443,16 +451,12 @@ class MainWindow(QMainWindow):
                 )
             else:
                 # Generate charts
-                charts = generate_all_charts(
+                chart_bytes = generate_all_charts(
                     results['dataframe'],
                     results['statistics'],
                     results['anomalies'],
                     results['column_types'],
                 )
-                chart_bytes = {
-                    name: save_figure_to_bytes(fig)
-                    for name, fig in charts.items()
-                }
 
                 generate_pdf_report(
                     file_path,
