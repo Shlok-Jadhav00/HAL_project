@@ -249,9 +249,19 @@ class ImportPanel(QWidget):
         """Pass the loaded dataset to the main window for analysis."""
         if self.loaded_data and self.on_dataset_loaded:
             # Add session metadata
-            self.loaded_data['session_id'] = (
-                self.loaded_data.get('session_id', 1)
-            )
+            if self.db_manager:
+                dataset_id = self.db_manager.insert_dataset(
+                    filename=self.loaded_data['filename'],
+                    source_path=self.loaded_data['file_path'],
+                    file_type=self.loaded_data['file_type'],
+                    row_count=self.loaded_data['row_count'],
+                    column_count=self.loaded_data['column_count']
+                )
+                session_id = self.db_manager.create_session(dataset_id)
+                self.loaded_data['session_id'] = session_id
+            else:
+                self.loaded_data['session_id'] = self.loaded_data.get('session_id', 1)
+                
             self.loaded_data['dataset_info'] = {
                 'filename': self.loaded_data['filename'],
                 'row_count': self.loaded_data['row_count'],

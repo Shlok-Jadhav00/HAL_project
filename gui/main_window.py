@@ -306,6 +306,19 @@ class MainWindow(QMainWindow):
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
+    def keyPressEvent(self, event):
+        """Handle global keyboard shortcuts directly (FR-087)."""
+        if event.modifiers() == Qt.ControlModifier:
+            if event.key() == Qt.Key_O:
+                self._switch_panel(0)
+                event.accept()
+                return
+            elif event.key() == Qt.Key_E:
+                self._export_report()
+                event.accept()
+                return
+        super().keyPressEvent(event)
+
         # Help menu (FR-089)
         help_menu = menubar.addMenu('&Help')
 

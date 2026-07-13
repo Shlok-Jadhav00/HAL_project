@@ -262,6 +262,30 @@ class AnalysisPanel(QWidget):
         """Set the session data for this panel."""
         self.session_data = data
         self.run_btn.setEnabled(True)
+        
+        if 'analysis_results' in data:
+            self._on_analysis_finished(data['analysis_results'])
+        else:
+            self._clear_ui()
+
+    def _clear_ui(self):
+        """Clear all analysis results from the UI."""
+        self.stats_table.setRowCount(0)
+        self.anomaly_table.setRowCount(0)
+        
+        while self.findings_layout.count():
+            child = self.findings_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+                
+        self.conclusion_text.clear()
+        self.recs_text.clear()
+        self.engineer_notes.clear()
+        
+        while self.graphs_layout.count():
+            child = self.graphs_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
 
     def _show_placeholder(self):
         """Show placeholder text when no analysis has been run."""
