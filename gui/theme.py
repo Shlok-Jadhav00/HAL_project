@@ -120,7 +120,7 @@ def get_app_stylesheet() -> str:
 
         #sidebar QPushButton:checked,
         #sidebar QPushButton[active="true"] {{
-            background-color: {SIDEBAR_ACTIVE};
+            background-color: {CONSOLE_GREY};
         }}
 
         /* === Cards / Panels === */
@@ -136,7 +136,7 @@ def get_app_stylesheet() -> str:
             background-color: {PANEL_WHITE};
             gridline-color: {STEEL_LINE};
             border: 1px solid {STEEL_LINE};
-            selection-background-color: {ROW_HOVER};
+            selection-background-color: {CONSOLE_GREY};
         }}
 
         QHeaderView::section {{

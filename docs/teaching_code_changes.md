@@ -78,3 +78,90 @@ long-running operations.
 ---
 
 *Real entries will be added above this line as actual development issues are found and fixed.*
+
+---
+
+## [2026-07-13] The "Shortcut Not Firing" Bug
+**The Problem:** Pressing `Ctrl+O` or `Ctrl+E` did not trigger the file dialogs if the user was focused on a `QTableWidget` or text editor in the app.
+
+**The Thinking Process:**
+1. We originally set the shortcuts on `QAction` objects inside a `QMenu` using `import_action.setShortcut('Ctrl+O')`.
+2. By default, a PyQt5 `QAction` uses `Qt.WindowShortcut` context. However, if a child widget (like a table) consumes the keyboard event, the action is bypassed.
+3. Overriding `keyPressEvent` on the main window also fails because the main window doesn't receive the event if the child widget doesn't ignore it.
+
+**The Fix (in `gui/main_window.py`):**
+```python
+# BEFORE (Buggy)
+import_action = QAction('&Import Dataset...', self)
+import_action.setShortcut('Ctrl+O')
+import_action.triggered.connect(lambda: self._switch_panel(0))
+
+# AFTER (Fixed)
+import_action = QAction('&Import Dataset...', self)
+import_action.setShortcut(QKeySequence('Ctrl+O'))
+import_action.setShortcutContext(Qt.ApplicationShortcut)
+import_action.triggered.connect(self._trigger_import)
+```
+
+**The Lesson:** For global application shortcuts in PyQt5 that must bypass child widget focus stealing, always set the context to `Qt.ApplicationShortcut`.
+
+---
+
+## [2026-07-13] The "Phantom Analysis Results" Bug
+**The Problem:** When opening multiple dataset tabs, switching between the tabs did not visually update the analysis panel (the graphs and tables showed the original dataset's results).
+
+**The Thinking Process:**
+1. We noticed that tab switching correctly updated the active `session_id` internally, but nothing on screen changed.
+2. The UI logic wasn't reloading the stored `analysis_results` from memory back into the tables when a tab was clicked.
+
+**The Fix (in `gui/analysis_panel.py`):**
+```python
+# BEFORE (Buggy)
+def set_session_data(self, data: Dict[str, Any]):
+    self.session_data = data
+    self.run_btn.setEnabled(True)
+
+# AFTER (Fixed)
+def set_session_data(self, data: Dict[str, Any]):
+    self.session_data = data
+    self.run_btn.setEnabled(True)
+    
+    if 'analysis_results' in data:
+        self._on_analysis_finished(data['analysis_results'])
+    else:
+        self._clear_ui()
+```
+
+**The Lesson:** Data-binding isn't automatic in PyQt5. When switching active contexts, you must explicitly clear and repopulate the widgets with the new state.
+
+---
+
+## [2026-07-13] The "Empty History Rows" Bug
+**The Problem:** The History panel showed the first row correctly, but all subsequent rows in the table were totally empty, and the status remained "In Progress" forever.
+
+**The Thinking Process:**
+1. The fact that the first row populated but the second row was entirely blank implied an invisible exception breaking the table population loop.
+2. Inspecting the `_populate_table` loop revealed `sid = session.get('session_id')`. However, the database returns objects (Records), not dictionaries!
+3. The `AttributeError` crashed the loop silently, leaving the remaining rows unpopulated.
+4. Additionally, the status was permanently "In Progress" because the Analysis thread never updated the database when it finished!
+
+**The Fix (in `gui/history_panel.py` and `gui/analysis_panel.py`):**
+```python
+# BEFORE (Buggy - history_panel.py)
+sid = session.get('session_id')
+
+# AFTER (Fixed)
+sid = session.session_id
+```
+
+```python
+# AFTER (Fixed - analysis_panel.py - DB tracking added)
+if self.db_manager:
+    self.db_manager.update_session(
+        session_id=sid,
+        status='Completed',
+        findings_count=len(results.get('insights', []))
+    )
+```
+
+**The Lesson:** Always be deeply aware of the data structures returned by ORMs/Database connectors. Treat objects as objects, and explicitly catch and log exceptions in UI loops so they don't silently swallow rendering failures.

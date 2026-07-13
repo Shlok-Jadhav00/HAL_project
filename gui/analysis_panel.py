@@ -323,6 +323,15 @@ class AnalysisPanel(QWidget):
         # Store results in session data for export
         if self.session_data:
             self.session_data['analysis_results'] = results
+            # Update DB to mark as Completed
+            if self.db_manager:
+                sid = self.session_data.get('session_id')
+                if sid:
+                    self.db_manager.update_session(
+                        session_id=sid,
+                        status='Completed',
+                        findings_count=len(results.get('insights', []))
+                    )
 
         self._populate_statistics(results['statistics'])
         self._populate_anomalies(results['anomalies'])
@@ -340,7 +349,16 @@ class AnalysisPanel(QWidget):
         self.progress_bar.setVisible(False)
         self.progress_label.setVisible(False)
         self.run_btn.setEnabled(True)
-        QMessageBox.warning(self, 'Analysis Error', error_msg)
+        QMessageBox.critical(self, 'Analysis Error', error_msg)
+        
+        if self.session_data and self.db_manager:
+            sid = self.session_data.get('session_id')
+            if sid:
+                self.db_manager.update_session(
+                    session_id=sid,
+                    status='Failed',
+                    findings_count=0
+                )
 
     def _populate_statistics(self, statistics: Dict[str, Any]):
         """Fill the statistics table (FR-030)."""

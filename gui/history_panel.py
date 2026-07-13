@@ -166,7 +166,7 @@ class HistoryPanel(QWidget):
             open_btn = QPushButton('Open')
             open_btn.setFixedHeight(24)
             open_btn.setStyleSheet('font-size: 8pt; padding: 2px 8px;')
-            sid = session.get('session_id')
+            sid = session.session_id
             open_btn.clicked.connect(
                 lambda checked, s=sid: self._open_session(s)
             )
