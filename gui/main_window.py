@@ -290,12 +290,14 @@ class MainWindow(QMainWindow):
         file_menu = menubar.addMenu('&File')
 
         import_action = QAction('&Import Dataset...', self)
-        import_action.setShortcut('Ctrl+O')
-        import_action.triggered.connect(lambda: self._switch_panel(0))
+        import_action.setShortcut(QKeySequence('Ctrl+O'))
+        import_action.setShortcutContext(Qt.ApplicationShortcut)
+        import_action.triggered.connect(self._trigger_import)
         file_menu.addAction(import_action)
 
         export_action = QAction('&Export Report...', self)
-        export_action.setShortcut('Ctrl+E')
+        export_action.setShortcut(QKeySequence('Ctrl+E'))
+        export_action.setShortcutContext(Qt.ApplicationShortcut)
         export_action.triggered.connect(self._export_report)
         file_menu.addAction(export_action)
 
@@ -313,18 +315,7 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
 
-    def keyPressEvent(self, event):
-        """Handle global keyboard shortcuts directly (FR-087)."""
-        if event.modifiers() == Qt.ControlModifier:
-            if event.key() == Qt.Key_O:
-                self._switch_panel(0)
-                event.accept()
-                return
-            elif event.key() == Qt.Key_E:
-                self._export_report()
-                event.accept()
-                return
-        super().keyPressEvent(event)
+
 
     # -------------------------------------------------------------------
     # Panel switching
@@ -340,6 +331,15 @@ class MainWindow(QMainWindow):
             btn = self.sidebar_buttons.get(name)
             if btn:
                 btn.setChecked(i == index)
+                
+        # Refresh history if switched to History panel
+        if index == 2:
+            self.history_panel._refresh_sessions()
+
+    def _trigger_import(self):
+        """Trigger the import flow (FR-087)."""
+        self._switch_panel(0)
+        self.import_panel._browse_file()
 
     # -------------------------------------------------------------------
     # Dataset loading (from ImportPanel)
