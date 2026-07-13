@@ -14,7 +14,7 @@ This module contains PyQt5 imports — it lives in gui/ (code_hygiene_guide.md).
 import logging
 from typing import Any, Dict
 
-from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
     QAction, QFileDialog, QHBoxLayout, QLabel, QMainWindow,
