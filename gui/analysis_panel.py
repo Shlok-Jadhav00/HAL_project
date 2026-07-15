@@ -37,9 +37,10 @@ class AnalysisWorker(QThread):
     finished = pyqtSignal(dict)
     error = pyqtSignal(str)
 
-    def __init__(self, session_data: Dict[str, Any], parent=None):
+    def __init__(self, session_data: Dict[str, Any], excluded_anomalies: set = None, parent=None):
         super().__init__(parent)
         self.session_data = session_data
+        self.excluded_anomalies = excluded_anomalies or set()
 
     def run(self):
         try:
@@ -90,6 +91,13 @@ class AnalysisWorker(QThread):
                 if_random_state=det_cfg.get('isolation_forest_random_state', 42)
             )
 
+            # Remove false positives (FR-039)
+            if self.excluded_anomalies and 'anomalies' in anomalies:
+                anomalies['anomalies'] = [
+                    a for a in anomalies['anomalies']
+                    if (a.get('column_name'), a.get('row_reference')) not in self.excluded_anomalies
+                ]
+
             self.progress.emit(65, 'Evaluating rules...')
             rules_path = get_rules_path()
             rules = load_rules(rules_path)
@@ -98,7 +106,7 @@ class AnalysisWorker(QThread):
             self.progress.emit(80, 'Generating insights...')
             dataset_info = self.session_data.get('dataset_info', {})
             insights = generate_insights(
-                stats, anomalies, matches, dataset_info
+                stats, anomalies, matches, dataset_info, self.excluded_anomalies
             )
 
             self.progress.emit(90, 'Building conclusion...')
@@ -302,7 +310,7 @@ class AnalysisPanel(QWidget):
         self.progress_bar.setValue(0)
         self.progress_label.setVisible(True)
 
-        self._worker = AnalysisWorker(self.session_data)
+        self._worker = AnalysisWorker(self.session_data, self.excluded_anomalies)
         self._worker.progress.connect(self._on_progress)
         self._worker.finished.connect(self._on_analysis_finished)
         self._worker.error.connect(self._on_analysis_error)
@@ -529,7 +537,7 @@ class AnalysisPanel(QWidget):
         QMessageBox.information(
             self, 'False Positive',
             f'Marked ({column}, row {row_ref}) as false positive.\n'
-            f'Click "Regenerate" to update findings.'
+            f'Click "Run Analysis" to update findings.'
         )
         logger.info('Marked false positive: %s, row %d', column, row_ref)
 
