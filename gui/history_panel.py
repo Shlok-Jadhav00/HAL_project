@@ -14,9 +14,11 @@ from typing import Any, Dict, List
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QHBoxLayout, QLabel, QMessageBox, QPushButton, QTableWidget,
-    QTableWidgetItem, QVBoxLayout, QWidget,
+    QHBoxLayout, QLabel, QMessageBox, QPushButton, QTableView,
+    QVBoxLayout, QWidget, QAbstractItemView, QHeaderView
 )
+
+from gui.models import HistoryTableModel
 
 from gui.theme import (
     CONFIRMED_GREEN, MODULE_COLORS, SEVERITY_COLORS,
@@ -86,17 +88,15 @@ class HistoryPanel(QWidget):
         layout.addLayout(toolbar)
 
         # Sessions table (FR-099, FR-102)
-        self.sessions_table = QTableWidget()
+        self.sessions_table = QTableView()
         self.sessions_table.setAlternatingRowColors(True)
-        self.sessions_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.sessions_table.setSortingEnabled(True)
-        self.sessions_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.sessions_table.setColumnCount(6)
-        self.sessions_table.setHorizontalHeaderLabels([
-            'Session ID', 'Dataset', 'Started', 'Status',
-            'Findings', 'Actions',
-        ])
+        self.sessions_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.sessions_table.setSortingEnabled(False)  # Sorting requires QSortFilterProxyModel, skipped for brevity
+        self.sessions_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.sessions_table.horizontalHeader().setStretchLastSection(True)
+        
+        self._table_model = HistoryTableModel()
+        self.sessions_table.setModel(self._table_model)
 
         layout.addWidget(self.sessions_table, 1)
 
@@ -127,50 +127,35 @@ class HistoryPanel(QWidget):
 
     def _populate_table(self, sessions: List[Any]):
         """Fill the sessions table."""
-        self.sessions_table.setRowCount(len(sessions))
-
-        for row, session in enumerate(sessions):
-            # Fetch dataset name
+        data_list = []
+        for session in sessions:
             dataset_name = 'Unknown'
             dataset = self.db_manager.get_dataset(session.dataset_id)
             if dataset:
                 dataset_name = dataset.filename
-
-            items = [
-                str(session.session_id),
-                dataset_name,
-                str(session.started_on),
-                session.status,
-                str(session.findings_count),
-            ]
-
-            for col, val in enumerate(items):
-                item = QTableWidgetItem(val)
-                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-
-                # Color status column
-                if col == 3:
-                    status = val
-                    if status == 'Completed':
-                        item.setForeground(
-                            __import__('PyQt5.QtGui', fromlist=['QColor']).QColor(CONFIRMED_GREEN)
-                        )
-                    elif status == 'Failed':
-                        item.setForeground(
-                            __import__('PyQt5.QtGui', fromlist=['QColor']).QColor(SEVERITY_COLORS.get('Critical', ''))
-                        )
-
-                self.sessions_table.setItem(row, col, item)
-
-            # Re-open button (FR-100)
+            
+            data_list.append({
+                'session_id': session.session_id,
+                'dataset_name': dataset_name,
+                'started_on': session.started_on,
+                'status': session.status,
+                'findings_count': session.findings_count
+            })
+            
+        self._table_model.update_data(data_list)
+        
+        # Re-open button (FR-100)
+        # For History (max 100 rows), setIndexWidget is acceptable for performance
+        for row, session_data in enumerate(data_list):
             open_btn = QPushButton('Open')
             open_btn.setFixedHeight(24)
             open_btn.setStyleSheet('font-size: 8pt; padding: 2px 8px;')
-            sid = session.session_id
+            sid = session_data['session_id']
             open_btn.clicked.connect(
                 lambda checked, s=sid: self._open_session(s)
             )
-            self.sessions_table.setCellWidget(row, 5, open_btn)
+            idx = self._table_model.index(row, 5) # Assuming actions column is 5
+            self.sessions_table.setIndexWidget(idx, open_btn)
 
         self.sessions_table.resizeColumnsToContents()
 
@@ -186,14 +171,14 @@ class HistoryPanel(QWidget):
 
         # Get unique session IDs from selected rows
         rows = set()
-        for item in selected:
-            rows.add(item.row())
+        for index in selected:
+            rows.add(index.row())
 
         session_ids = []
         for row in rows:
-            sid_item = self.sessions_table.item(row, 0)
-            if sid_item:
-                session_ids.append(sid_item.text())
+            sid = self._table_model.get_session_id(row)
+            if sid != -1:
+                session_ids.append(str(sid))
 
         reply = QMessageBox.question(
             self, 'Confirm Delete',

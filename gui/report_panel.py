@@ -186,9 +186,14 @@ class ReportPanel(QWidget):
         try:
             r = self.analysis_results
             if fmt == 'pdf':
-                chart_bytes = {}
-                if self.include_charts_cb.isChecked():
-                    chart_bytes = r.get('chart_bytes', {})
+                chart_bytes = r.get('charts', {})
+                if self.include_charts_cb.isChecked() and not chart_bytes:
+                    # Phase 5 Optimization: Lazy Chart Generation
+                    from core.chart_builder import generate_all_charts
+                    chart_bytes = generate_all_charts(
+                        r['dataframe'], r['statistics'], r['anomalies'], r['measurement_types']
+                    )
+                    r['charts'] = chart_bytes # Cache it for the session
 
                 generate_pdf_report(
                     file_path, r['dataset_info'], session_id,

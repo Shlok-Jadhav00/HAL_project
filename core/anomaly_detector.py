@@ -44,8 +44,9 @@ def detect_anomalies(df: pd.DataFrame,
                      zscore_threshold: float = 3.0,
                      iqr_multiplier: float = 1.5,
                      if_contamination: float = 0.05,
-                     if_n_estimators: int = 100,
+                     if_n_estimators: int = 50,
                      if_random_state: int = 42,
+                     if_n_jobs: int = 1,
                      ) -> Dict[str, Any]:
     """Run anomaly detection on all numeric columns.
 
@@ -103,7 +104,7 @@ def detect_anomalies(df: pd.DataFrame,
     if 'isolation_forest' in methods and len(numeric_cols) >= 2:
         if_anomalies, if_flags = detect_isolation_forest(
             df, numeric_cols, if_contamination, if_n_estimators,
-            if_random_state
+            if_random_state, if_n_jobs
         )
         all_anomalies.extend(if_anomalies)
 
@@ -237,8 +238,9 @@ def detect_iqr_outliers(df: pd.DataFrame,
 def detect_isolation_forest(df: pd.DataFrame,
                             numeric_cols: List[str],
                             contamination: float = 0.05,
-                            n_estimators: int = 100,
+                            n_estimators: int = 50,
                             random_state: int = 42,
+                            n_jobs: int = 1,
                             ) -> Tuple[List[Dict[str, Any]], Dict[int, bool]]:
     """Detect multivariate anomalies using Isolation Forest.
 
@@ -276,6 +278,7 @@ def detect_isolation_forest(df: pd.DataFrame,
         contamination=contamination,
         n_estimators=n_estimators,
         random_state=random_state,
+        n_jobs=n_jobs,
     )
     predictions = model.fit_predict(clean_data)
 

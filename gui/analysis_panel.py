@@ -17,11 +17,12 @@ from typing import Any, Dict, List, Set, Tuple
 
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import (
-    QGroupBox, QHBoxLayout, QLabel, QMessageBox, QProgressBar,
-    QPushButton, QScrollArea, QTabWidget, QTableWidget, QTableWidgetItem,
-    QTextEdit, QVBoxLayout, QWidget,
+    QAbstractItemView, QGroupBox, QHBoxLayout, QLabel, QMessageBox, QProgressBar,
+    QPushButton, QScrollArea, QTableView, QTableWidget, QTableWidgetItem,
+    QTabWidget, QVBoxLayout, QWidget,
 )
 
+from gui.models import AnomalyTableModel
 from gui.theme import (
     GRAPHITE, MODULE_COLORS, MUTED_SLATE, PANEL_WHITE,
     SEVERITY_BG_COLORS, SEVERITY_COLORS,
@@ -87,8 +88,9 @@ class AnalysisWorker(QThread):
                 zscore_threshold=det_cfg.get('zscore_threshold', 3.0),
                 iqr_multiplier=det_cfg.get('iqr_multiplier', 1.5),
                 if_contamination=det_cfg.get('isolation_forest_contamination', 0.05),
-                if_n_estimators=det_cfg.get('isolation_forest_n_estimators', 100),
-                if_random_state=det_cfg.get('isolation_forest_random_state', 42)
+                if_n_estimators=det_cfg.get('isolation_forest_n_estimators', 50),
+                if_random_state=det_cfg.get('isolation_forest_random_state', 42),
+                if_n_jobs=det_cfg.get('isolation_forest_n_jobs', 1)
             )
 
             # Remove false positives (FR-039)
@@ -113,12 +115,10 @@ class AnalysisWorker(QThread):
             conclusion = generate_conclusion(insights)
             recs = generate_recommendations(insights, matches)
 
-            self.progress.emit(95, 'Generating graphs...')
-            chart_bytes = generate_all_charts(df_clean, stats, anomalies, measurement_types)
-
             self.progress.emit(100, 'Analysis complete.')
 
-            self.finished.emit({
+            # Return all computed data
+            results = {
                 'dataframe': df_clean,
                 'column_types': col_types,
                 'measurement_types': measurement_types,
@@ -131,8 +131,9 @@ class AnalysisWorker(QThread):
                 'conclusion': conclusion,
                 'recommendations': recs,
                 'dataset_info': dataset_info,
-                'chart_bytes': chart_bytes,
-            })
+                'charts': {}, # Phase 5: Lazy load charts when exporting PDF
+            }
+            self.finished.emit(results)
 
         except Exception as exc:
             logger.error('Analysis failed: %s', exc, exc_info=True)
@@ -210,10 +211,17 @@ class AnalysisPanel(QWidget):
         self.results_tabs.addTab(self.stats_table, '📊 Statistics')
 
         # Tab: Anomalies (FR-035)
-        self.anomaly_table = QTableWidget()
+        self.anomaly_table = QTableView()
         self.anomaly_table.setAlternatingRowColors(True)
-        self.anomaly_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.anomaly_table.setSortingEnabled(True)
+        self.anomaly_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.anomaly_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.anomaly_table.setSortingEnabled(False)
+        self.anomaly_table.horizontalHeader().setStretchLastSection(True)
+        
+        self._anomaly_model = AnomalyTableModel()
+        self.anomaly_table.setModel(self._anomaly_model)
+        self.anomaly_table.clicked.connect(self._on_anomaly_clicked)
+        
         self.results_tabs.addTab(self.anomaly_table, '⚠️ Anomalies')
 
         # Tab: Findings (FR-054)
@@ -279,7 +287,7 @@ class AnalysisPanel(QWidget):
     def _clear_ui(self):
         """Clear all analysis results from the UI."""
         self.stats_table.setRowCount(0)
-        self.anomaly_table.setRowCount(0)
+        self._anomaly_model.update_data([])
         
         while self.findings_layout.count():
             child = self.findings_layout.takeAt(0)
@@ -347,7 +355,7 @@ class AnalysisPanel(QWidget):
         self._populate_anomalies(results['anomalies'])
         self._populate_findings(results['insights'])
         self._populate_conclusion(results['conclusion'], results['recommendations'])
-        self._populate_graphs(results['chart_bytes'])
+        self._populate_graphs(results.get('charts', {}))
         
         # Pass to report panel
         self.report_panel.set_results(results)
@@ -403,47 +411,15 @@ class AnalysisPanel(QWidget):
     def _populate_anomalies(self, anomalies: Dict[str, Any]):
         """Fill the anomalies table (FR-035, FR-039)."""
         anomaly_list = anomalies.get('anomalies', [])
-
-        headers = ['Column', 'Row', 'Method', 'Severity', 'Value',
-                    'Actions']
-        self.anomaly_table.setColumnCount(len(headers))
-        self.anomaly_table.setHorizontalHeaderLabels(headers)
-        self.anomaly_table.setRowCount(len(anomaly_list))
-
-        for row, a in enumerate(anomaly_list):
-            col_name = a.get('column_name', '')
-            row_ref = a.get('row_reference', '')
-            method = a.get('method', '')
-            severity = a.get('severity', 'Warning')
-            value = a.get('value')
-
-            items = [col_name, str(row_ref), method, severity,
-                     self._fmt(value)]
-            for c, val in enumerate(items):
-                item = QTableWidgetItem(val)
-                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-
-                # Color severity column
-                if c == 3:
-                    sev_color = SEVERITY_COLORS.get(severity, GRAPHITE)
-                    item.setForeground(
-                        __import__('PyQt5.QtGui', fromlist=['QColor']).QColor(sev_color)
-                    )
-
-                self.anomaly_table.setItem(row, c, item)
-
-            # FR-039: False positive button
-            fp_btn = QPushButton('Mark FP')
-            fp_btn.setFixedHeight(24)
-            fp_btn.setStyleSheet(
-                f'background-color: {MUTED_SLATE}; font-size: 8pt; padding: 2px 6px;'
-            )
-            fp_btn.clicked.connect(
-                lambda checked, c=col_name, r=row_ref: self._mark_false_positive(c, r)
-            )
-            self.anomaly_table.setCellWidget(row, 5, fp_btn)
-
+        self._anomaly_model.update_data(anomaly_list)
         self.anomaly_table.resizeColumnsToContents()
+
+    def _on_anomaly_clicked(self, index):
+        """Handle clicks on the anomaly table (FR-039 False Positive)."""
+        if index.isValid() and index.column() == 5: # Actions column
+            col, row_ref = self._anomaly_model.get_anomaly_info(index.row())
+            if col and row_ref != -1:
+                self._mark_false_positive(col, row_ref)
 
     def _populate_findings(self, insights: Dict[str, Any]):
         """Fill the findings section (FR-054)."""

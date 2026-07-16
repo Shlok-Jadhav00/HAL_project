@@ -499,6 +499,29 @@ def preprocess_dataset(df: pd.DataFrame,
         working, norm_log = normalize_formatting(working, normalize_columns)
         full_log.extend(norm_log)
 
+    # Phase 5 Optimization: Memory Downcasting
+    import numpy as np
+    float64_cols = working.select_dtypes(include=['float64']).columns
+    int64_cols = working.select_dtypes(include=['int64']).columns
+    
+    if len(float64_cols) > 0:
+        working[float64_cols] = working[float64_cols].astype(np.float32)
+        full_log.append({
+            'action': 'downcast_memory',
+            'column': '*',
+            'detail': f'Downcasted {len(float64_cols)} float64 columns to float32',
+            'affected_count': len(working),
+        })
+        
+    if len(int64_cols) > 0:
+        working[int64_cols] = working[int64_cols].astype(np.int32)
+        full_log.append({
+            'action': 'downcast_memory',
+            'column': '*',
+            'detail': f'Downcasted {len(int64_cols)} int64 columns to int32',
+            'affected_count': len(working),
+        })
+
     # FR-018: Log is included in the return value for the final report
     logger.info(
         'Preprocessing complete: %d log entries, %d rows remaining.',

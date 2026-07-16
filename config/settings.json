@@ -6,8 +6,9 @@
                       "zscore_threshold":  3.0,
                       "iqr_multiplier":  1.5,
                       "isolation_forest_contamination":  0.05,
-                      "isolation_forest_n_estimators":  100,
-                      "isolation_forest_random_state":  42
+                      "isolation_forest_n_estimators":  50,
+                      "isolation_forest_random_state":  42,
+                      "isolation_forest_n_jobs":  1
                   },
     "statistics":  {
                        "correlation_threshold":  0.7,
@@ -22,7 +23,7 @@
                           "default_categorical_fill_constant":  "Unknown"
                       },
     "paths":  {
-                  "default_report_folder":  "%APPDATA%\\AEIA\\reports",
+                  "default_report_folder":  "",
                   "rule_file_path":  "%APPDATA%\\AEIA\\rules\\engineering_rules.json",
                   "database_path":  "%APPDATA%\\AEIA\\database\\aeia.db"
               },
