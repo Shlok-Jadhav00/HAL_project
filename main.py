@@ -113,6 +113,9 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName('AEIA')
     app.setApplicationVersion(__version__)
+    
+    from gui.theme import apply_theme
+    apply_theme(app)
 
     from database.db_manager import DatabaseManager
     db_path = get_database_path()

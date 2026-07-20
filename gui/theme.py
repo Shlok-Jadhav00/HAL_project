@@ -13,49 +13,58 @@ Layout: implementation_specification.md §7.
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QApplication
 
-from core import color_palette as cp
-
 # ---------------------------------------------------------------------------
-# The Palette
+# The Palette (from docs/color_philosophy.md)
 # ---------------------------------------------------------------------------
 
-INSTRUMENT_NAVY = cp.INSTRUMENT_NAVY
+INSTRUMENT_NAVY = '#10243E'
 INSTRUMENT_NAVY_QC = QColor(INSTRUMENT_NAVY)
 
-SIGNAL_BLUE = cp.SIGNAL_BLUE
+SIGNAL_BLUE = '#2563EB'
 SIGNAL_BLUE_QC = QColor(SIGNAL_BLUE)
 
-CONSOLE_GREY = cp.CONSOLE_GREY
+CONSOLE_GREY = '#F7F8FA'
 CONSOLE_GREY_QC = QColor(CONSOLE_GREY)
 
-PANEL_WHITE = cp.PANEL_WHITE
+PANEL_WHITE = '#FFFFFF'
 PANEL_WHITE_QC = QColor(PANEL_WHITE)
 
-STEEL_LINE = cp.STEEL_LINE
+STEEL_LINE = '#D3D8E0'
 STEEL_LINE_QC = QColor(STEEL_LINE)
 
-GRAPHITE = cp.GRAPHITE
+GRAPHITE = '#111827'
 GRAPHITE_QC = QColor(GRAPHITE)
 
-ALERT_RED = cp.ALERT_RED
-ALERT_RED_QC = QColor(ALERT_RED)
-
-CAUTION_AMBER = cp.CAUTION_AMBER
-CAUTION_AMBER_QC = QColor(CAUTION_AMBER)
-
-INFO_BLUE = cp.INFO_BLUE
-INFO_BLUE_QC = QColor(INFO_BLUE)
-
-CONFIRMED_GREEN = cp.CONFIRMED_GREEN
-CONFIRMED_GREEN_QC = QColor(CONFIRMED_GREEN)
-
-MUTED_SLATE = cp.MUTED_SLATE
+MUTED_SLATE = '#6B7280'
 MUTED_SLATE_QC = QColor(MUTED_SLATE)
 
-INFO_BLUE_BG = cp.INFO_BLUE_BG
-INFO_BLUE_TEXT = cp.INFO_BLUE_TEXT
+ALERT_RED = '#DC2626'
+ALERT_RED_QC = QColor(ALERT_RED)
 
-MODULE_COLORS = cp.MODULE_COLORS
+CAUTION_AMBER = '#D97706'
+CAUTION_AMBER_QC = QColor(CAUTION_AMBER)
+
+INFO_BLUE = '#2563EB'
+INFO_BLUE_QC = QColor(INFO_BLUE)
+
+CONFIRMED_GREEN = '#16A34A'
+CONFIRMED_GREEN_QC = QColor(CONFIRMED_GREEN)
+
+INFO_BLUE_BG = '#DBEAFE'
+INFO_BLUE_TEXT = '#1D4ED8'
+
+# Module Identifiers
+MODULE_COLORS = {
+    'Import': SIGNAL_BLUE,
+    'Preprocess': '#0D9488',
+    'Statistics': INSTRUMENT_NAVY,
+    'Anomaly': '#4338CA',
+    'Rules': '#6D28D9',
+    'Findings': GRAPHITE,
+    'Report': CONFIRMED_GREEN,
+    'History': MUTED_SLATE,
+    'Settings': '#7C4A1E',
+}
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +78,7 @@ WINDOW_MIN_HEIGHT = 800
 
 SIDEBAR_WIDTH = 220
 SIDEBAR_COLLAPSED_WIDTH = 60
+PREVIEW_ROW_COUNT = 20
 
 # Font sizes (§7)
 BODY_FONT_SIZE = 10
@@ -88,6 +98,7 @@ def get_app_stylesheet() -> str:
     return f"""
         /* === Global === */
         QWidget {{
+            font-family: "Segoe UI", "Inter", "IBM Plex Sans", sans-serif;
             font-size: {BODY_FONT_SIZE}pt;
             color: {GRAPHITE};
             background-color: {CONSOLE_GREY};
@@ -105,6 +116,10 @@ def get_app_stylesheet() -> str:
             max-width: {SIDEBAR_WIDTH}px;
         }}
 
+        #sidebar QLabel {{
+            background-color: transparent;
+        }}
+
         #sidebar QPushButton {{
             background-color: transparent;
             color: white;
@@ -112,6 +127,7 @@ def get_app_stylesheet() -> str:
             padding: 12px 16px;
             text-align: left;
             font-size: {BODY_FONT_SIZE}pt;
+            border-left: 4px solid transparent; /* Reserve space for active indicator */
         }}
 
         #sidebar QPushButton:hover {{
@@ -121,6 +137,8 @@ def get_app_stylesheet() -> str:
         #sidebar QPushButton:checked,
         #sidebar QPushButton[active="true"] {{
             background-color: {CONSOLE_GREY};
+            color: {GRAPHITE};
+            border-left: 4px solid {SIGNAL_BLUE};
         }}
 
         /* === Cards / Panels === */
@@ -323,17 +341,13 @@ SEVERITY_COLORS = {
 }
 
 SEVERITY_BG_COLORS = {
-    'Critical': '#FEF2F2',
-    'Warning': '#FFFBEB',
+    'Critical': '#FEE2E2', # As per docs
+    'Warning': '#FEF3C7',
     'Info': INFO_BLUE_BG,
 }
 
 SEVERITY_TEXT_COLORS = {
-    'Critical': '#991B1B',
-    'Warning': '#92400E',
+    'Critical': ALERT_RED,
+    'Warning': CAUTION_AMBER,
     'Info': INFO_BLUE_TEXT,
 }
-
-# Fonts
-SECTION_HEADER_FONT_SIZE = 12
-SIDEBAR_COLLAPSED_WIDTH = 64

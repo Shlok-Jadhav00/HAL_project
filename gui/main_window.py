@@ -25,6 +25,7 @@ from PyQt5.QtWidgets import (
 from gui.theme import (
     BODY_FONT_SIZE, MUTED_SLATE, PAGE_TITLE_FONT_SIZE, SIDEBAR_WIDTH,
     WINDOW_HEIGHT, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH, WINDOW_WIDTH,
+    STEEL_LINE
 )
 from gui.import_panel import ImportPanel
 from gui.analysis_panel import AnalysisPanel
@@ -149,7 +150,6 @@ class MainWindow(QMainWindow):
         self._setup_window()
         self._setup_sidebar()
         self._setup_content_area()
-        self._setup_status_bar()
         self._setup_menu_bar()
 
         logger.info('Main window initialized.')
@@ -205,12 +205,7 @@ class MainWindow(QMainWindow):
 
         layout.addStretch()
 
-        # Version label
-        ver_label = QLabel(f'v{__version__}')
-        ver_label.setStyleSheet(
-            f'color: {MUTED_SLATE}; font-size: 8pt; padding: 10px 16px;'
-        )
-        layout.addWidget(ver_label)
+
 
         self.sidebar = sidebar
 
@@ -230,6 +225,10 @@ class MainWindow(QMainWindow):
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(16, 16, 16, 8)
         content_layout.setSpacing(8)
+
+        # Top App Bar (FR-086)
+        top_bar = self._setup_top_app_bar()
+        content_layout.addWidget(top_bar)
 
         # Session tabs (FR-085)
         self.session_tabs = QTabWidget()
@@ -269,18 +268,34 @@ class MainWindow(QMainWindow):
         # Start on Import panel
         self._switch_panel(0)
 
-    def _setup_status_bar(self):
-        """Build the status bar (FR-086)."""
-        self.status_bar = QStatusBar()
-        self.setStatusBar(self.status_bar)
+    def _setup_top_app_bar(self) -> QWidget:
+        """Build the top app bar (FR-086)."""
+        top_app_bar = QWidget()
+        top_app_bar.setObjectName('topAppBar')
+        
+        # We style the border here so it doesn't affect child labels
+        top_app_bar.setStyleSheet(f"#topAppBar {{ border-bottom: 1px solid {STEEL_LINE}; padding-bottom: 8px; }}")
+
+        layout = QHBoxLayout(top_app_bar)
+        layout.setContentsMargins(0, 0, 0, 8)
+        layout.setSpacing(16)
 
         self.status_dataset_label = QLabel('No dataset loaded')
+        self.status_dataset_label.setStyleSheet("font-weight: bold;")
+        
         self.status_row_label = QLabel('')
         self.status_timestamp_label = QLabel('')
+        
+        version_label = QLabel(f'v{__version__}')
+        version_label.setStyleSheet(f"color: {MUTED_SLATE}; font-size: 8pt;")
 
-        self.status_bar.addWidget(self.status_dataset_label, 1)
-        self.status_bar.addWidget(self.status_row_label)
-        self.status_bar.addPermanentWidget(self.status_timestamp_label)
+        layout.addWidget(self.status_dataset_label)
+        layout.addWidget(self.status_row_label)
+        layout.addWidget(self.status_timestamp_label)
+        layout.addStretch()
+        layout.addWidget(version_label)
+        
+        return top_app_bar
 
     def _setup_menu_bar(self):
         """Build the menu bar with File and Help menus."""
@@ -476,7 +491,6 @@ class MainWindow(QMainWindow):
                 self, 'Export Complete',
                 f'Report saved to:\n{file_path}'
             )
-            self.status_bar.showMessage(f'Report exported: {file_path}', 5000)
 
         except Exception as exc:
             logger.error('Report export failed: %s', exc, exc_info=True)

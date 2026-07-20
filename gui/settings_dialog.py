@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import (
 )
 
 from gui.theme import (
-    MODULE_COLORS, MUTED_SLATE,
+    MODULE_COLORS, MUTED_SLATE, CONFIRMED_GREEN,
 )
 
 logger = logging.getLogger('aeia.settings_dialog')
@@ -114,12 +114,33 @@ class SettingsDialog(QWidget):
 
         save_btn = QPushButton('💾  Save Settings')
         save_btn.setFixedHeight(36)
+        save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {CONFIRMED_GREEN};
+            }}
+            QPushButton:hover {{
+                background-color: #15803D;
+            }}
+            QPushButton:pressed {{
+                background-color: #166534;
+            }}
+        """)
         save_btn.clicked.connect(self._save_settings)
         btn_layout.addWidget(save_btn)
 
         restore_btn = QPushButton('🔄  Restore Defaults')
         restore_btn.setFixedHeight(36)
-        restore_btn.setStyleSheet(f'background-color: {MUTED_SLATE};')
+        restore_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {MUTED_SLATE};
+            }}
+            QPushButton:hover {{
+                background-color: #4B5563;
+            }}
+            QPushButton:pressed {{
+                background-color: #374151;
+            }}
+        """)
         restore_btn.clicked.connect(self._restore_defaults)
         btn_layout.addWidget(restore_btn)
 

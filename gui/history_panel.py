@@ -94,6 +94,8 @@ class HistoryPanel(QWidget):
         self.sessions_table.setSortingEnabled(False)  # Sorting requires QSortFilterProxyModel, skipped for brevity
         self.sessions_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.sessions_table.horizontalHeader().setStretchLastSection(True)
+        self.sessions_table.setMouseTracking(True)
+        self.sessions_table.setStyleSheet("QTableView::item:hover { background-color: #EFF6FF; color: #111827; }")
         
         self._table_model = HistoryTableModel()
         self.sessions_table.setModel(self._table_model)

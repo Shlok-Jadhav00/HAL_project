@@ -69,10 +69,9 @@ SEVERITY_COLORS = {
 
 # Disclaimer (implementation_specification.md §8)
 DISCLAIMER_TEXT = (
-    "This report was generated with AI-assisted analysis (AEIA). "
     "Findings and recommendations are advisory and require review and "
     "sign-off by a qualified engineer before any operational decision "
-    "is made."
+    "is made. This report was generated with AI-assisted analysis (AEIA)."
 )
 
 

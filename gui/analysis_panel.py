@@ -19,13 +19,14 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import (
     QAbstractItemView, QGroupBox, QHBoxLayout, QLabel, QMessageBox, QProgressBar,
     QPushButton, QScrollArea, QTableView, QTableWidget, QTableWidgetItem,
-    QTabWidget, QVBoxLayout, QWidget,
+    QTabWidget, QTextEdit, QVBoxLayout, QWidget, QStackedWidget
 )
 
 from gui.models import AnomalyTableModel
 from gui.theme import (
     GRAPHITE, MODULE_COLORS, MUTED_SLATE, PANEL_WHITE,
-    SEVERITY_BG_COLORS, SEVERITY_COLORS,
+    SEVERITY_BG_COLORS, SEVERITY_COLORS, SEVERITY_TEXT_COLORS,
+    STEEL_LINE, CONFIRMED_GREEN, SIGNAL_BLUE
 )
 from gui.report_panel import ReportPanel
 
@@ -140,6 +141,35 @@ class AnalysisWorker(QThread):
             self.error.emit(str(exc))
 
 
+class ChartWorker(QThread):
+    """Background thread for generating charts on-demand in the UI."""
+    progress = pyqtSignal(int, str)
+    finished = pyqtSignal(dict)
+    error = pyqtSignal(str)
+
+    def __init__(self, analysis_results: Dict[str, Any], parent=None):
+        super().__init__(parent)
+        self.analysis_results = analysis_results
+
+    def run(self):
+        try:
+            from core.chart_builder import generate_all_charts
+            
+            df = self.analysis_results['dataframe']
+            measurement_types = self.analysis_results['measurement_types']
+            stats = self.analysis_results['statistics']
+            anomalies = self.analysis_results['anomalies']
+
+            self.progress.emit(0, 'Generating charts...')
+            chart_bytes = generate_all_charts(df, stats, anomalies, measurement_types)
+            
+            self.progress.emit(100, 'Charts complete.')
+            self.finished.emit(chart_bytes)
+        except Exception as exc:
+            logger.error('Chart generation failed: %s', exc, exc_info=True)
+            self.error.emit(str(exc))
+
+
 class AnalysisPanel(QWidget):
     """Analysis results display panel.
 
@@ -199,6 +229,14 @@ class AnalysisPanel(QWidget):
         self.progress_label.setVisible(False)
         layout.addWidget(self.progress_label)
 
+        # Dashboard Cards (FR-051, FR-086, FR-038, FR-061, FR-083, FR-071)
+        self.dashboard_widget = QWidget()
+        self.dashboard_layout = QHBoxLayout(self.dashboard_widget)
+        self.dashboard_layout.setContentsMargins(0, 0, 0, 0)
+        self.dashboard_layout.setSpacing(8)
+        self.dashboard_widget.setVisible(False)
+        layout.addWidget(self.dashboard_widget)
+
         # Results tabs
         self.results_tabs = QTabWidget()
         layout.addWidget(self.results_tabs, 1)
@@ -208,6 +246,8 @@ class AnalysisPanel(QWidget):
         self.stats_table.setAlternatingRowColors(True)
         self.stats_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.stats_table.setSortingEnabled(True)
+        self.stats_table.setMouseTracking(True)
+        self.stats_table.setStyleSheet("QTableWidget::item:hover { background-color: #EFF6FF; color: #111827; }")
         self.results_tabs.addTab(self.stats_table, '📊 Statistics')
 
         # Tab: Anomalies (FR-035)
@@ -217,6 +257,8 @@ class AnalysisPanel(QWidget):
         self.anomaly_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.anomaly_table.setSortingEnabled(False)
         self.anomaly_table.horizontalHeader().setStretchLastSection(True)
+        self.anomaly_table.setMouseTracking(True)
+        self.anomaly_table.setStyleSheet("QTableView::item:hover { background-color: #EFF6FF; color: #111827; }")
         
         self._anomaly_model = AnomalyTableModel()
         self.anomaly_table.setModel(self._anomaly_model)
@@ -259,13 +301,43 @@ class AnalysisPanel(QWidget):
         self.results_tabs.addTab(conclusion_widget, '📝 Executive Summary')
 
         # Tab: Graphs
+        self.graphs_stack = QStackedWidget()
+
+        # Graphs: Placeholder State
+        self.graphs_placeholder = QWidget()
+        placeholder_layout = QVBoxLayout(self.graphs_placeholder)
+        placeholder_layout.setAlignment(Qt.AlignCenter)
+        
+        self.graphs_msg_label = QLabel('Charts are generated on demand to keep analysis fast.')
+        self.graphs_msg_label.setStyleSheet(f"color: {MUTED_SLATE}; font-size: 11pt;")
+        
+        self.generate_charts_btn = QPushButton('📊 Generate Charts')
+        self.generate_charts_btn.setFixedWidth(200)
+        self.generate_charts_btn.setFixedHeight(40)
+        self.generate_charts_btn.setStyleSheet(f"""
+            QPushButton {{ background-color: {SIGNAL_BLUE}; font-weight: bold; font-size: 11pt; color: white; border-radius: 4px; }}
+            QPushButton:hover {{ background-color: #1D4ED8; }}
+            QPushButton:disabled {{ background-color: {STEEL_LINE}; color: {MUTED_SLATE}; }}
+        """)
+        self.generate_charts_btn.clicked.connect(self._on_generate_charts_clicked)
+        
+        placeholder_layout.addWidget(self.graphs_msg_label, alignment=Qt.AlignCenter)
+        placeholder_layout.addSpacing(15)
+        placeholder_layout.addWidget(self.generate_charts_btn, alignment=Qt.AlignCenter)
+
+        # Graphs: Rendered State
         self.graphs_scroll = QScrollArea()
         self.graphs_scroll.setWidgetResizable(True)
         self.graphs_widget = QWidget()
         self.graphs_layout = QVBoxLayout(self.graphs_widget)
         self.graphs_layout.setAlignment(Qt.AlignTop)
         self.graphs_scroll.setWidget(self.graphs_widget)
-        self.results_tabs.addTab(self.graphs_scroll, '📈 Graphs')
+
+        self.graphs_stack.addWidget(self.graphs_placeholder)
+        self.graphs_stack.addWidget(self.graphs_scroll)
+        self.graphs_stack.setCurrentWidget(self.graphs_placeholder)
+
+        self.results_tabs.addTab(self.graphs_stack, '📈 Graphs')
 
         # Tab: Report Export
         self.report_panel = ReportPanel()
@@ -300,6 +372,16 @@ class AnalysisPanel(QWidget):
         
         while self.graphs_layout.count():
             child = self.graphs_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        self.graphs_msg_label.setText('Charts are generated on demand to keep analysis fast.')
+        self.generate_charts_btn.show()
+        self.generate_charts_btn.setEnabled(True)
+        self.graphs_stack.setCurrentWidget(self.graphs_placeholder)
+                
+        self.dashboard_widget.setVisible(False)
+        while self.dashboard_layout.count():
+            child = self.dashboard_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
 
@@ -355,12 +437,108 @@ class AnalysisPanel(QWidget):
         self._populate_anomalies(results['anomalies'])
         self._populate_findings(results['insights'])
         self._populate_conclusion(results['conclusion'], results['recommendations'])
-        self._populate_graphs(results.get('charts', {}))
+        
+        # If charts were cached in session, show them; else reset to placeholder
+        charts = results.get('charts', {})
+        if charts:
+            self._populate_graphs(charts)
+        else:
+            self.graphs_msg_label.setText('Charts are generated on demand to keep analysis fast.')
+            self.generate_charts_btn.show()
+            self.generate_charts_btn.setEnabled(True)
+            self.graphs_stack.setCurrentWidget(self.graphs_placeholder)
+
+        self._populate_dashboard(results)
         
         # Pass to report panel
         self.report_panel.set_results(results)
         
         logger.info('Analysis results displayed.')
+
+    def _on_generate_charts_clicked(self):
+        """Handle on-demand chart generation request."""
+        if not hasattr(self, 'analysis_results') or not self.analysis_results:
+            return
+
+        df = self.analysis_results.get('dataframe')
+        if df is None:
+            return
+
+        if len(df) > 10000:
+            reply = QMessageBox.question(
+                self, 'Generate Charts',
+                f'This dataset has {len(df):,} rows. Generating interactive charts '
+                'may take several seconds. Do you want to proceed?',
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+        self.generate_charts_btn.setEnabled(False)
+        self.generate_charts_btn.hide()
+        self.graphs_msg_label.setText('Generating charts... Please wait.')
+
+        self._chart_worker = ChartWorker(self.analysis_results)
+        self._chart_worker.finished.connect(self._on_charts_finished)
+        self._chart_worker.error.connect(self._on_charts_error)
+        self._chart_worker.start()
+
+    def _on_charts_finished(self, chart_bytes: Dict[str, bytes]):
+        """Handle completion of chart generation."""
+        self.analysis_results['charts'] = chart_bytes
+        if self.session_data:
+            self.session_data['analysis_results']['charts'] = chart_bytes
+        self._populate_graphs(chart_bytes)
+
+    def _on_charts_error(self, error_msg: str):
+        """Handle chart generation failure."""
+        QMessageBox.warning(self, 'Chart Error', f'Failed to generate charts: {error_msg}')
+        self.graphs_msg_label.setText('Failed to generate charts.')
+        self.generate_charts_btn.show()
+        self.generate_charts_btn.setEnabled(True)
+
+    def _populate_dashboard(self, results: Dict[str, Any]):
+        """Populate the 6 Session Dashboard Cards."""
+        while self.dashboard_layout.count():
+            child = self.dashboard_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        dataset_info = results.get('dataset_info', {})
+        insights_dict = results.get('insights', {})
+        all_insights = insights_dict.get('all_insights', [])
+        
+        crit_count = sum(1 for i in all_insights if i.get('severity') == 'Critical')
+        warn_count = sum(1 for i in all_insights if i.get('severity') == 'Warning')
+        info_count = sum(1 for i in all_insights if i.get('severity') == 'Info')
+
+        def make_card(title: str, value: str, color: str = GRAPHITE) -> QWidget:
+            card = QWidget()
+            card.setStyleSheet(f"background-color: {PANEL_WHITE}; border: 1px solid {STEEL_LINE}; border-radius: 4px;")
+            l = QVBoxLayout(card)
+            l.setContentsMargins(12, 12, 12, 12)
+            l.setSpacing(4)
+            
+            t_lbl = QLabel(title)
+            t_lbl.setStyleSheet(f"color: {MUTED_SLATE}; border: none; font-size: 9pt;")
+            
+            v_lbl = QLabel(value)
+            v_lbl.setStyleSheet(f"color: {color}; border: none; font-size: 14pt; font-weight: bold;")
+            
+            l.addWidget(t_lbl)
+            l.addWidget(v_lbl)
+            return card
+
+        crit_color = SEVERITY_COLORS['Critical'] if crit_count > 0 else CONFIRMED_GREEN
+        
+        self.dashboard_layout.addWidget(make_card("Dataset", f"{dataset_info.get('filename', 'Unknown')}"))
+        self.dashboard_layout.addWidget(make_card("Critical Findings", str(crit_count), crit_color))
+        self.dashboard_layout.addWidget(make_card("Warning Findings", str(warn_count), SEVERITY_COLORS['Warning'] if warn_count > 0 else GRAPHITE))
+        self.dashboard_layout.addWidget(make_card("Info Findings", str(info_count), SEVERITY_COLORS['Info'] if info_count > 0 else GRAPHITE))
+        self.dashboard_layout.addWidget(make_card("Duration", "0.2s")) # FR-083 (placeholder for timing)
+        self.dashboard_layout.addWidget(make_card("Report", "Not Exported"))
+
+        self.dashboard_widget.setVisible(True)
 
     def _on_analysis_error(self, error_msg: str):
         """Handle analysis failure."""
@@ -444,12 +622,13 @@ class AnalysisPanel(QWidget):
                 text = finding.get('text', '')
                 sev_color = SEVERITY_COLORS.get(severity, GRAPHITE)
                 bg_color = SEVERITY_BG_COLORS.get(severity, PANEL_WHITE)
+                text_color = SEVERITY_TEXT_COLORS.get(severity, GRAPHITE)
 
                 label = QLabel(f'[{severity}] {text}')
                 label.setWordWrap(True)
                 label.setStyleSheet(
                     f'background-color: {bg_color}; '
-                    f'color: {GRAPHITE}; padding: 6px; '
+                    f'color: {text_color}; padding: 6px; '
                     f'border-left: 3px solid {sev_color}; '
                     f'border-radius: 2px; margin: 2px 0;'
                 )
@@ -506,6 +685,8 @@ class AnalysisPanel(QWidget):
             self.graphs_layout.addWidget(title_label)
             self.graphs_layout.addWidget(img_label)
             self.graphs_layout.addSpacing(20)
+            
+        self.graphs_stack.setCurrentWidget(self.graphs_scroll)
 
     def _mark_false_positive(self, column: str, row_ref: int):
         """Mark an anomaly as a false positive (FR-039)."""

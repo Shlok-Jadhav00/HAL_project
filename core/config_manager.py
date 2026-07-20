@@ -101,9 +101,9 @@ def get_reports_path() -> str:
     if configured_path:
         return resolve_path(configured_path)
     
-    # Phase 5 Optimization: Store reports in user's Documents folder instead of AppData
-    documents_dir = os.path.join(os.path.expanduser('~'), 'Documents')
-    return os.path.join(documents_dir, 'AEIA Reports')
+    # Default to User's Documents folder instead of AppData
+    documents_folder = os.path.join(os.path.expanduser('~'), 'Documents', 'AEIA_Reports')
+    return documents_folder
 
 
 def get_logs_path() -> str:

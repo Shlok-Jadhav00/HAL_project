@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
 )
 
 from gui.theme import (
-    MODULE_COLORS, MUTED_SLATE,
+    MODULE_COLORS, MUTED_SLATE, CONFIRMED_GREEN, STEEL_LINE,
 )
 
 logger = logging.getLogger('aeia.report_panel')
@@ -66,6 +66,7 @@ class ReportPanel(QWidget):
 
         # Options
         options = QGroupBox('Export Options')
+        options.setStyleSheet("QGroupBox { padding: 16px; margin-top: 10px; }")
         options_layout = QVBoxLayout(options)
 
         self.include_charts_cb = QCheckBox('Include charts/graphs (FR-069)')
@@ -76,6 +77,7 @@ class ReportPanel(QWidget):
 
         # Preview (FR-074)
         preview_group = QGroupBox('Report Preview')
+        preview_group.setStyleSheet("QGroupBox { padding: 16px; margin-top: 10px; }")
         preview_layout = QVBoxLayout(preview_group)
 
         self.preview_text = QTextEdit()
@@ -92,14 +94,33 @@ class ReportPanel(QWidget):
 
         self.export_pdf_btn = QPushButton('📄  Export PDF')
         self.export_pdf_btn.setFixedHeight(40)
+        self.export_pdf_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {CONFIRMED_GREEN};
+            }}
+            QPushButton:hover {{
+                background-color: #15803D;
+            }}
+            QPushButton:pressed {{
+                background-color: #166534;
+            }}
+        """)
         self.export_pdf_btn.clicked.connect(lambda: self._export('pdf'))
         btn_layout.addWidget(self.export_pdf_btn)
 
         self.export_csv_btn = QPushButton('📊  Export CSV')
         self.export_csv_btn.setFixedHeight(40)
-        self.export_csv_btn.setStyleSheet(
-            f'background-color: {MUTED_SLATE};'
-        )
+        self.export_csv_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {MUTED_SLATE};
+            }}
+            QPushButton:hover {{
+                background-color: #4B5563;
+            }}
+            QPushButton:pressed {{
+                background-color: #374151;
+            }}
+        """)
         self.export_csv_btn.clicked.connect(lambda: self._export('csv'))
         btn_layout.addWidget(self.export_csv_btn)
 

@@ -73,10 +73,16 @@ def generate_trend_chart(df: pd.DataFrame,
     Returns:
         matplotlib Figure object.
     """
-    fig, ax = plt.subplots(figsize=figsize, facecolor=PANEL_WHITE)
+    series = df[column].dropna()
+    
+    # Scale width dynamically for large datasets so the line isn't too concentrated
+    # Base is figsize[0] (10 inches). Adds 1 inch per 50 rows, capped at 50 inches.
+    dynamic_width = max(figsize[0], min(len(series) / 50.0, 50.0))
+    current_figsize = (dynamic_width, figsize[1])
+
+    fig, ax = plt.subplots(figsize=current_figsize, facecolor=PANEL_WHITE)
     ax.set_facecolor(CONSOLE_GREY)
 
-    series = df[column].dropna()
     x = np.arange(len(series))
     y = series.values
 
