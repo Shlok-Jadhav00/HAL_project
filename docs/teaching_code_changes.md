@@ -155,13 +155,79 @@ sid = session.session_id
 ```
 
 ```python
-# AFTER (Fixed - analysis_panel.py - DB tracking added)
-if self.db_manager:
-    self.db_manager.update_session(
-        session_id=sid,
-        status='Completed',
-        findings_count=len(results.get('insights', []))
-    )
+# AFTER (Fixed - analysis_panel.py)
+def _on_analysis_finished(self, results: Dict[str, Any]):
+    # Save to history db
+    if self.db_manager:
+        session = self.session_data
+        sid = session.get('session_id')
+        # ... logic updated to handle database updates
 ```
 
-**The Lesson:** Always be deeply aware of the data structures returned by ORMs/Database connectors. Treat objects as objects, and explicitly catch and log exceptions in UI loops so they don't silently swallow rendering failures.
+**The Lesson:** Always be careful with ORM / database layer return types. Never assume you're getting a standard dictionary back from a database fetch method unless it's explicitly serialized first.
+
+---
+
+## [2026-07-22] The "Row Number Off-By-1" Bug
+**The Problem:** The analysis report indicated an anomaly at row 44, but in the actual CSV viewed in Excel, the problematic data was on row 45.
+
+**The Thinking Process:**
+1. A row number discrepancy of exactly 1 or 2 usually indicates a 0-based versus 1-based indexing mismatch.
+2. In `anomaly_detector.py`, the Z-score and IQR detectors were recording the index using `int(idx)`.
+3. Pandas dataframes use 0-based indexing for data rows. However, when an engineer opens the CSV in Excel, the header occupies row 1, and the data starts at row 2. Therefore, pandas index 0 is Excel row 2 (offset of +2).
+
+**The Fix (in `core/anomaly_detector.py`):**
+```python
+# BEFORE (Buggy)
+for idx, val in series.items():
+    if val < lower_bound or val > upper_bound:
+        anomalies.append({
+            'row_reference': int(idx),
+            # ...
+        })
+
+# AFTER (Fixed)
+for idx, val in series.items():
+    if val < lower_bound or val > upper_bound:
+        anomalies.append({
+            'row_reference': int(idx) + 2,
+            # ...
+        })
+```
+
+**The Lesson:** Always map internal data-structure indices to the user's conceptual model. If the user views data in a spreadsheet, your row references must match the spreadsheet's coordinate system (1-based with headers).
+
+---
+
+## [2026-07-22] The "Duplicate Warning and Critical" Bug
+**The Problem:** The same data point was marked as a Warning (by the statistical anomaly detector) and as a Critical (by the engineering rules), resulting in duplicate entries for the exact same event.
+
+**The Thinking Process:**
+1. The statistical anomaly detectors (Z-Score/IQR) run independently of the expert system rules. They both produce findings.
+2. In `core/insight_generator.py`, the `seen` set for deduplicating only tracked `(column, finding_type)`. Since an anomaly is of type "Anomaly" and a rule match is of type "Rule", they were treated as distinct findings even if they flagged the identical row.
+3. We needed a step in `_apply_confidence_matrix` to identify when both a statistical detector and a rule detector fired on the exact same `(col, row)` group, and drop the generic statistical finding in favor of the more specific rule finding.
+
+**The Fix (in `core/insight_generator.py`):**
+```python
+# BEFORE (Buggy)
+for (col, row), group in row_findings.items():
+    # Loop over all insights in the group and update their severities
+    for insight in group:
+        # ...
+
+# AFTER (Fixed)
+for (col, row), group in row_findings.items():
+    has_stats = len(stat_detectors) > 0
+    has_rules = len(rule_detectors) > 0
+
+    # If a rule matches and stats also flag it, keep only the rule
+    if has_rules and has_stats:
+        kept_insights = rule_detectors
+    else:
+        kept_insights = group
+
+    for insight in kept_insights:
+        # ... update severities and append to filtered_insights
+```
+
+**The Lesson:** When merging results from multiple independent diagnostic engines, always implement a unified deduplication/prioritization layer. Otherwise, overlapping evidence will spam the user with redundant alerts rather than increasing confidence.

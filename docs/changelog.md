@@ -166,24 +166,26 @@ closes every gap found.
 ### Status
 - ✅ Phase 4 — Testing: DONE (Core pipeline, including NLP processing, validated against ground truth)
 
----
+## [2026-07-22] Dynamic Rule Generation & Bug Fixes
 
-*Template for future entries:*
-
-```
-## [YYYY-MM-DD] Short Description
-
-### Added / Modified / Removed
+### Added / Modified
 | File | Change | FR/NFR |
 |---|---|---|
-| `path/to/file` | What changed | FR-XXX |
+| `core/anomaly_detector.py` | [MODIFIED] Fixed row indexing to offset by +2, aligning with Excel row numbers | FR-039 |
+| `core/insight_generator.py` | [MODIFIED] Added deduplication to merge identical row events, keeping the highest severity | FR-056 |
+| `core/expert_system.py` | [MODIFIED] Added `has_rule_for_column` and `add_new_threshold_rules` helper functions | FR-047, FR-094 |
+| `core/data_loader.py` | [MODIFIED] Added dynamic `xlrd` engine support for legacy `.xls` files | FR-002 |
+| `gui/import_panel.py` | [MODIFIED] Built `ParameterSelectionDialog` to allow column selection and dynamic rule creation before analysis | FR-007, FR-081, FR-090 |
+| `requirements.lock.txt` | [MODIFIED] Added `xlrd` dependency | NFR-012 |
 
 ### Decisions Made
-- Bullet points for any design decisions or deviations
+- Allowed the user to skip rules for parameters to decouple mathematical anomaly detection from strict rule enforcement.
+- Opted for `xlrd` engine because `openpyxl` exclusively supports modern `.xlsx` formats.
 
 ### Issues Found
-- Bullet points for any bugs or problems encountered
+- The Z-score and IQR detectors were reporting 0-based pandas indices, confusing engineers used to 1-based Excel row numbering.
+- An anomaly and a rule match on the exact same row were appearing as two distinct findings, creating clutter and spamming the summary report.
 
 ### Status
-- Phase status updates
-```
+- ✅ Phase 4 — Testing: DONE
+- ✅ Phase 5 — Packaging & Deployment: DONE (re-compiled executable passed testing)
