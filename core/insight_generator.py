@@ -161,6 +161,7 @@ def _apply_confidence_matrix(all_insights: List[Dict[str, Any]]) -> List[Dict[st
             row_findings[(col, str(row))].append(insight)
 
     # 2. Evaluate confidence for each group
+    filtered_insights = list(dataset_findings)
     for (col, row), group in row_findings.items():
         stat_detectors = [f for f in group if f.get('source_type') in ('Statistic', 'Anomaly')]
         rule_detectors = [f for f in group if f.get('source_type') == 'Rule']
@@ -184,7 +185,13 @@ def _apply_confidence_matrix(all_insights: List[Dict[str, Any]]) -> List[Dict[st
         else:
             new_severity = 'Info'
 
-        for insight in group:
+        # If a rule matches and stats also flag it, keep only the rule (FR-056)
+        if has_rules and has_stats:
+            kept_insights = rule_detectors
+        else:
+            kept_insights = group
+
+        for insight in kept_insights:
             if insight.get('severity') == 'Critical' and insight.get('source_type') == 'Rule':
                 insight['severity'] = 'Critical'
             else:
@@ -193,8 +200,10 @@ def _apply_confidence_matrix(all_insights: List[Dict[str, Any]]) -> List[Dict[st
             # Update the text to reflect the new severity if it's in the text
             text = insight.get('text', '')
             insight['text'] = re.sub(r'\((Info|Warning|Critical)\)', f'({insight["severity"]})', text)
+            
+            filtered_insights.append(insight)
 
-    return all_insights
+    return filtered_insights
 
 
 def regenerate_insights(statistics: Dict[str, Any],

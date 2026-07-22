@@ -231,7 +231,8 @@ def _load_xlsx(file_path: str) -> pd.DataFrame:
 
     FR-002: Support importing Excel (.xlsx) files.
     """
-    return pd.read_excel(file_path, sheet_name=0, engine='openpyxl')
+    engine = 'xlrd' if file_path.lower().endswith('.xls') else 'openpyxl'
+    return pd.read_excel(file_path, sheet_name=0, engine=engine)
 
 
 def _load_json(file_path: str) -> pd.DataFrame:

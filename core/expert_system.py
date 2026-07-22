@@ -259,11 +259,11 @@ def _eval_raw_value(rule: Dict, df, scope: str,
         for idx, val in df[col].dropna().items():
             if _compare(float(val), operator, threshold):
                 matched_on = (
-                    f'{col} = {val} at row {idx} '
+                    f'{col} = {val} at row {int(idx) + 2} '
                     f'{operator} {threshold}'
                 )
                 matches.append(_build_match(rule, col, matched_on,
-                                            row_reference=int(idx)))
+                                            row_reference=int(idx) + 2))
 
     return matches
 
@@ -406,3 +406,68 @@ def _build_match(rule: Dict, column: str, matched_on: str,
         'column': column,
         'row_reference': row_reference,
     }
+
+
+def has_rule_for_column(rules: List[Dict[str, Any]], column_name: str) -> bool:
+    """Check if there is a raw_value rule for the given column."""
+    import fnmatch
+    for rule in rules:
+        if rule.get('is_enabled', True):
+            cond = rule.get('condition', {})
+            if cond.get('metric') == 'raw_value':
+                scope = rule.get('scope_pattern', '')
+                # Specifically for column rules (we don't count wildcard '*' as a specific rule for this prompt)
+                if scope != '*' and fnmatch.fnmatch(column_name, scope):
+                    return True
+    return False
+
+
+def add_new_threshold_rules(rule_file_path: str, column_name: str, warning_limit: Optional[float], critical_limit: Optional[float]):
+    """Add new Warning and Critical raw_value rules for a column to the JSON file."""
+    import json
+    import os
+    import time
+
+    with open(rule_file_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    rules = data.get('rules', [])
+
+    # Generate unique ID base
+    ts = int(time.time() * 1000)
+
+    if warning_limit is not None:
+        rules.append({
+            "rule_id": f"RULE-{ts}-W",
+            "rule_name": f"Warning Threshold Breach - {column_name}",
+            "is_enabled": True,
+            "scope_pattern": column_name,
+            "condition": {
+                "metric": "raw_value",
+                "operator": ">",
+                "value": warning_limit
+            },
+            "conclusion_text": f"Value for {column_name} exceeded the warning threshold of {warning_limit}.",
+            "recommendation_text": f"Monitor {column_name} closely for further upward drift.",
+            "severity": "Warning"
+        })
+
+    if critical_limit is not None:
+        rules.append({
+            "rule_id": f"RULE-{ts}-C",
+            "rule_name": f"Critical Threshold Breach - {column_name}",
+            "is_enabled": True,
+            "scope_pattern": column_name,
+            "condition": {
+                "metric": "raw_value",
+                "operator": ">",
+                "value": critical_limit
+            },
+            "conclusion_text": f"Value for {column_name} exceeded the critical safety threshold of {critical_limit}.",
+            "recommendation_text": f"Immediately inspect the system associated with {column_name}.",
+            "severity": "Critical"
+        })
+
+    data['rules'] = rules
+    with open(rule_file_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2)

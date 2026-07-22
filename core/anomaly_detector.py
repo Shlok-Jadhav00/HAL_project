@@ -167,7 +167,7 @@ def detect_zscore_outliers(df: pd.DataFrame,
             if abs(z) > threshold:
                 anomalies.append({
                     'column_name': col,
-                    'row_reference': int(idx),
+                    'row_reference': int(idx) + 2,
                     'method': 'ZScore',
                     'severity': DEFAULT_ANOMALY_SEVERITY,
                     'value': float(df.at[idx, col]),
@@ -220,7 +220,7 @@ def detect_iqr_outliers(df: pd.DataFrame,
             if val < lower_bound or val > upper_bound:
                 anomalies.append({
                     'column_name': col,
-                    'row_reference': int(idx),
+                    'row_reference': int(idx) + 2,
                     'method': 'IQR',
                     'severity': DEFAULT_ANOMALY_SEVERITY,
                     'value': float(val),
@@ -285,10 +285,10 @@ def detect_isolation_forest(df: pd.DataFrame,
     # -1 = anomaly, 1 = normal
     for i, (idx, pred) in enumerate(zip(clean_data.index, predictions)):
         if pred == -1:
-            flags[int(idx)] = True
+            flags[int(idx) + 2] = True
             anomalies.append({
                 'column_name': ','.join(numeric_cols),
-                'row_reference': int(idx),
+                'row_reference': int(idx) + 2,
                 'method': 'IsolationForest',
                 'severity': DEFAULT_ANOMALY_SEVERITY,
                 'value': None,  # Multivariate — no single value

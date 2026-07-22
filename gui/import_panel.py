@@ -20,7 +20,8 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import (
     QFileDialog, QGroupBox, QHBoxLayout, QLabel, QMessageBox,
     QProgressBar, QPushButton, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QWidget, QStackedWidget
+    QVBoxLayout, QWidget, QStackedWidget, QDialog, QCheckBox, 
+    QScrollArea, QLineEdit, QFormLayout
 )
 
 from gui.theme import (
@@ -71,6 +72,150 @@ class LoadWorker(QThread):
         except Exception as exc:
             logger.error('Load failed: %s', exc, exc_info=True)
             self.error.emit(ERROR_CANNOT_PARSE)
+
+
+class ParameterSelectionDialog(QDialog):
+    def __init__(self, col_types, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle('Select Parameters to Analyse')
+        self.setMinimumWidth(600)
+        self.col_types = col_types
+        self.selected_cols = []
+        self.rules_path = 'rules/engineering_rules.json'
+        
+        from core.expert_system import load_rules
+        try:
+            self.rules = load_rules(self.rules_path)
+        except Exception:
+            self.rules = []
+            
+        self._build_ui()
+        
+    def _build_ui(self):
+        from core.expert_system import has_rule_for_column
+        
+        layout = QVBoxLayout(self)
+        
+        info = QLabel("Select which columns you want to include in the analysis.")
+        layout.addWidget(info)
+        
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        content = QWidget()
+        self.form = QFormLayout(content)
+        
+        self.checkboxes = {}
+        for col, ctype in self.col_types.items():
+            cb = QCheckBox(col)
+            # Default to checked if it's numeric and not Sample_ID
+            if ctype == 'numeric' and col != 'Sample_ID':
+                cb.setChecked(True)
+                
+            has_rule = has_rule_for_column(self.rules, col)
+            rule_label = QLabel("✅ has rules" if has_rule else "⚠️ no rules")
+            if not has_rule:
+                rule_label.setStyleSheet(f"color: {MUTED_SLATE};")
+            
+            row_widget = QWidget()
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setContentsMargins(0,0,0,0)
+            row_layout.addWidget(cb)
+            row_layout.addStretch()
+            row_layout.addWidget(QLabel(f"({ctype})"))
+            row_layout.addWidget(rule_label)
+            
+            self.form.addRow(row_widget)
+            self.checkboxes[col] = (cb, has_rule)
+            
+        scroll.setWidget(content)
+        layout.addWidget(scroll)
+        
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        self.continue_btn = QPushButton("Continue ▶")
+        self.continue_btn.setStyleSheet(f"background-color: {SIGNAL_BLUE}; font-weight: bold; padding: 6px 12px;")
+        self.continue_btn.clicked.connect(self._on_continue)
+        btn_layout.addWidget(self.continue_btn)
+        layout.addLayout(btn_layout)
+        
+    def _on_continue(self):
+        self.selected_cols = [col for col, (cb, _) in self.checkboxes.items() if cb.isChecked()]
+        
+        # Check if any selected numeric column lacks a rule
+        missing_rules = []
+        for col in self.selected_cols:
+            if self.col_types[col] == 'numeric' and not self.checkboxes[col][1]:
+                missing_rules.append(col)
+                
+        if missing_rules:
+            self._prompt_for_rules(missing_rules)
+        else:
+            self.accept()
+            
+    def _prompt_for_rules(self, missing_rules):
+        rule_dialog = QDialog(self)
+        rule_dialog.setWindowTitle('Rule Setup for Unmatched Parameters')
+        rule_dialog.setMinimumWidth(500)
+        
+        layout = QVBoxLayout(rule_dialog)
+        layout.addWidget(QLabel(f"{len(missing_rules)} selected parameters have no engineering rules. You can set optional threshold limits for them below."))
+        
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        content = QWidget()
+        form = QFormLayout(content)
+        
+        self.rule_inputs = {}
+        for col in missing_rules:
+            group = QGroupBox(col)
+            group_layout = QFormLayout(group)
+            
+            w_input = QLineEdit()
+            w_input.setPlaceholderText("e.g. 100")
+            c_input = QLineEdit()
+            c_input.setPlaceholderText("e.g. 120")
+            
+            group_layout.addRow("Warning if value >", w_input)
+            group_layout.addRow("Critical if value >", c_input)
+            
+            self.rule_inputs[col] = (w_input, c_input)
+            form.addRow(group)
+            
+        scroll.setWidget(content)
+        layout.addWidget(scroll)
+        
+        save_cb = QCheckBox("Save these rules permanently to engineering_rules.json")
+        save_cb.setChecked(True)
+        layout.addWidget(save_cb)
+        
+        btn_layout = QHBoxLayout()
+        skip_btn = QPushButton("Skip (analyse without rules)")
+        save_btn = QPushButton("Save & Run ▶")
+        save_btn.setStyleSheet(f"background-color: {SIGNAL_BLUE}; font-weight: bold;")
+        
+        skip_btn.clicked.connect(rule_dialog.reject)
+        save_btn.clicked.connect(rule_dialog.accept)
+        
+        btn_layout.addWidget(skip_btn)
+        btn_layout.addWidget(save_btn)
+        layout.addLayout(btn_layout)
+        
+        if rule_dialog.exec_() == QDialog.Accepted:
+            # Save rules
+            if save_cb.isChecked():
+                from core.expert_system import add_new_threshold_rules
+                for col, (w_input, c_input) in self.rule_inputs.items():
+                    w_val = None
+                    c_val = None
+                    try: w_val = float(w_input.text())
+                    except ValueError: pass
+                    try: c_val = float(c_input.text())
+                    except ValueError: pass
+                    
+                    if w_val is not None or c_val is not None:
+                        add_new_threshold_rules(self.rules_path, col, w_val, c_val)
+                    
+        self.accept()
 
 
 class ImportPanel(QWidget):
@@ -334,25 +479,39 @@ class ImportPanel(QWidget):
 
     def _proceed(self):
         """Pass the loaded dataset to the main window for analysis."""
-        if self.loaded_data and self.on_dataset_loaded:
-            # Add session metadata
-            if self.db_manager:
-                dataset_id = self.db_manager.insert_dataset(
-                    filename=self.loaded_data['filename'],
-                    source_path=self.loaded_data['file_path'],
-                    file_type=self.loaded_data['file_type'],
-                    row_count=self.loaded_data['row_count'],
-                    column_count=self.loaded_data['column_count']
-                )
-                session_id = self.db_manager.create_session(dataset_id)
-                self.loaded_data['session_id'] = session_id
-            else:
-                self.loaded_data['session_id'] = self.loaded_data.get('session_id', 1)
-                
-            self.loaded_data['dataset_info'] = {
-                'filename': self.loaded_data['filename'],
-                'row_count': self.loaded_data['row_count'],
-                'column_count': self.loaded_data['column_count'],
-                'import_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            }
-            self.on_dataset_loaded(self.loaded_data)
+        if not self.loaded_data:
+            return
+            
+        dialog = ParameterSelectionDialog(self.loaded_data['column_types'], self)
+        if dialog.exec_() == QDialog.Accepted:
+            selected = set(dialog.selected_cols)
+            new_col_types = {}
+            for col, ctype in self.loaded_data['column_types'].items():
+                if col in selected:
+                    new_col_types[col] = ctype
+                else:
+                    new_col_types[col] = 'ignore' # Won't be picked up as numeric
+            self.loaded_data['column_types'] = new_col_types
+            
+            if self.on_dataset_loaded:
+                # Add session metadata
+                if self.db_manager:
+                    dataset_id = self.db_manager.insert_dataset(
+                        filename=self.loaded_data['filename'],
+                        source_path=self.loaded_data['file_path'],
+                        file_type=self.loaded_data['file_type'],
+                        row_count=self.loaded_data['row_count'],
+                        column_count=self.loaded_data['column_count']
+                    )
+                    session_id = self.db_manager.create_session(dataset_id)
+                    self.loaded_data['session_id'] = session_id
+                else:
+                    self.loaded_data['session_id'] = self.loaded_data.get('session_id', 1)
+                    
+                self.loaded_data['dataset_info'] = {
+                    'filename': self.loaded_data['filename'],
+                    'row_count': self.loaded_data['row_count'],
+                    'column_count': self.loaded_data['column_count'],
+                    'import_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                }
+                self.on_dataset_loaded(self.loaded_data)
