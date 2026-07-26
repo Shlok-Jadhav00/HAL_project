@@ -593,15 +593,14 @@ class TestModule8_Charts:
 
     def test_chart_to_bytes(self, cleaned, stats, anomalies, measurement_types):
         """FR-070: Charts can be exported to bytes (for PDF embedding)."""
-        import matplotlib.pyplot as plt
         df_clean, _, _ = cleaned
         charts = chart_builder.generate_all_charts(
             df_clean, stats, anomalies, measurement_types
         )
-        for name, fig in charts.items():
-            data = chart_builder.save_figure_to_bytes(fig)
+        for name, data in charts.items():
+            # generate_all_charts already returns bytes via save_figure_to_bytes
+            assert isinstance(data, bytes), f"Chart '{name}' should be bytes"
             assert len(data) > 100, f"Chart '{name}' bytes too small"
-            plt.close(fig)
 
 
 # ---------------------------------------------------------------------------
@@ -615,18 +614,12 @@ class TestModule9_ReportGeneration:
                                  conclusion, recommendations, dataset_info,
                                  measurement_types):
         """FR-071: PDF report is created and non-empty."""
-        import matplotlib.pyplot as plt
-
         df_clean, _, _ = cleaned
 
-        # Generate charts for the report
-        charts = chart_builder.generate_all_charts(
+        # generate_all_charts already returns bytes
+        chart_bytes = chart_builder.generate_all_charts(
             df_clean, stats, anomalies, measurement_types
         )
-        chart_bytes = {}
-        for name, fig in charts.items():
-            chart_bytes[name] = chart_builder.save_figure_to_bytes(fig)
-            plt.close(fig)
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             output_path = os.path.join(tmp_dir, 'test_report.pdf')

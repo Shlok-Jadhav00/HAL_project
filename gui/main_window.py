@@ -473,6 +473,7 @@ class MainWindow(QMainWindow):
                     results['statistics'],
                     results['anomalies'],
                     results['column_types'],
+                    chart_mode='auto',
                 )
 
                 generate_pdf_report(

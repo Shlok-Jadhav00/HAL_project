@@ -66,7 +66,7 @@ for dataset_name in datasets:
     conclusion = recommendation_engine.generate_conclusion(insights, statistics=stats, dataset_info=di)
     
     # 6. Charts
-    charts = chart_builder.generate_all_charts(df_clean, stats, anomalies, mt)
+    charts = chart_builder.generate_all_charts(df_clean, stats, anomalies, mt, chart_mode='auto')
     
     # 7. Generate PDF
     report_builder.generate_pdf_report(

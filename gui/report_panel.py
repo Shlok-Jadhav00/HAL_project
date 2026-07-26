@@ -210,11 +210,14 @@ class ReportPanel(QWidget):
                 chart_bytes = r.get('charts', {})
                 if self.include_charts_cb.isChecked() and not chart_bytes:
                     # Phase 5 Optimization: Lazy Chart Generation
+                    # Always use 'auto' mode for PDF — large datasets get
+                    # adaptive downsampling automatically (readable in print).
                     from core.chart_builder import generate_all_charts
                     chart_bytes = generate_all_charts(
-                        r['dataframe'], r['statistics'], r['anomalies'], r['measurement_types']
+                        r['dataframe'], r['statistics'], r['anomalies'],
+                        r['measurement_types'], chart_mode='auto',
                     )
-                    r['charts'] = chart_bytes # Cache it for the session
+                    r['charts'] = chart_bytes  # Cache it for the session
 
                 generate_pdf_report(
                     file_path, r['dataset_info'], session_id,

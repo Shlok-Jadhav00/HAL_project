@@ -17,8 +17,9 @@ from typing import Any, Dict, List, Set, Tuple
 
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import (
-    QAbstractItemView, QGroupBox, QHBoxLayout, QLabel, QMessageBox, QProgressBar,
-    QPushButton, QScrollArea, QTableView, QTableWidget, QTableWidgetItem,
+    QAbstractItemView, QButtonGroup, QDialog, QGroupBox, QHBoxLayout,
+    QLabel, QMessageBox, QProgressBar, QPushButton, QRadioButton,
+    QScrollArea, QSpinBox, QTableView, QTableWidget, QTableWidgetItem,
     QTabWidget, QTextEdit, QVBoxLayout, QWidget, QStackedWidget
 )
 
@@ -147,9 +148,16 @@ class ChartWorker(QThread):
     finished = pyqtSignal(dict)
     error = pyqtSignal(str)
 
-    def __init__(self, analysis_results: Dict[str, Any], parent=None):
+    def __init__(self, analysis_results: Dict[str, Any],
+                 chart_mode: str = 'auto',
+                 row_start: int = None,
+                 row_end: int = None,
+                 parent=None):
         super().__init__(parent)
         self.analysis_results = analysis_results
+        self.chart_mode = chart_mode
+        self.row_start = row_start
+        self.row_end = row_end
 
     def run(self):
         try:
@@ -161,13 +169,206 @@ class ChartWorker(QThread):
             anomalies = self.analysis_results['anomalies']
 
             self.progress.emit(0, 'Generating charts...')
-            chart_bytes = generate_all_charts(df, stats, anomalies, measurement_types)
+            chart_bytes = generate_all_charts(
+                df, stats, anomalies, measurement_types,
+                chart_mode=self.chart_mode,
+                row_start=self.row_start,
+                row_end=self.row_end,
+            )
             
             self.progress.emit(100, 'Charts complete.')
             self.finished.emit(chart_bytes)
         except Exception as exc:
             logger.error('Chart generation failed: %s', exc, exc_info=True)
             self.error.emit(str(exc))
+
+
+class LargeDatasetChartDialog(QDialog):
+    """Dialog shown when a large dataset is detected before chart generation."""
+
+    def __init__(self, row_count: int, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle('Chart Rendering Options')
+        self.setMinimumWidth(420)
+        self.row_count = row_count
+        self.chart_mode = 'overview'
+        self.row_start = 0
+        self.row_end = row_count
+        self._build_ui()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+
+        info = QLabel(
+            f'<b>Large dataset detected ({self.row_count:,} rows).</b><br>'
+            'Choose how to generate charts:'
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        layout.addSpacing(8)
+
+        # Radio buttons
+        self._btn_group = QButtonGroup(self)
+
+        self._rb_overview = QRadioButton('Overview (Fast && Recommended)')
+        self._rb_overview.setChecked(True)
+        self._rb_full = QRadioButton('Full Resolution (Scrollable)')
+        self._rb_range = QRadioButton('Custom Row Range')
+
+        self._btn_group.addButton(self._rb_overview, 0)
+        self._btn_group.addButton(self._rb_full, 1)
+        self._btn_group.addButton(self._rb_range, 2)
+
+        layout.addWidget(self._rb_overview)
+        layout.addWidget(self._rb_full)
+        layout.addWidget(self._rb_range)
+
+        # Row range inputs (disabled unless 'range' is selected)
+        range_widget = QWidget()
+        range_layout = QHBoxLayout(range_widget)
+        range_layout.setContentsMargins(24, 4, 0, 4)
+        range_layout.addWidget(QLabel('Start Row:'))
+        self._spin_start = QSpinBox()
+        self._spin_start.setRange(1, self.row_count)
+        self._spin_start.setValue(1)
+        range_layout.addWidget(self._spin_start)
+        range_layout.addWidget(QLabel('End Row:'))
+        self._spin_end = QSpinBox()
+        self._spin_end.setRange(1, self.row_count)
+        self._spin_end.setValue(min(self.row_count, 5000))
+        range_layout.addWidget(self._spin_end)
+        range_layout.addStretch()
+        layout.addWidget(range_widget)
+
+        self._spin_start.setEnabled(False)
+        self._spin_end.setEnabled(False)
+        self._rb_range.toggled.connect(self._on_range_toggled)
+
+        layout.addSpacing(12)
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        cancel_btn = QPushButton('Cancel')
+        cancel_btn.clicked.connect(self.reject)
+        gen_btn = QPushButton('Generate')
+        gen_btn.setStyleSheet(
+            f'background-color: {SIGNAL_BLUE}; color: white; '
+            'font-weight: bold; padding: 6px 16px;'
+        )
+        gen_btn.clicked.connect(self._on_generate)
+        btn_layout.addWidget(cancel_btn)
+        btn_layout.addWidget(gen_btn)
+        layout.addLayout(btn_layout)
+
+    def _on_range_toggled(self, checked: bool):
+        self._spin_start.setEnabled(checked)
+        self._spin_end.setEnabled(checked)
+
+    def _on_generate(self):
+        checked_id = self._btn_group.checkedId()
+        if checked_id == 0:
+            self.chart_mode = 'overview'
+        elif checked_id == 1:
+            self.chart_mode = 'full'
+        elif checked_id == 2:
+            self.chart_mode = 'range'
+            self.row_start = self._spin_start.value() - 1  # 0-based
+            self.row_end = self._spin_end.value()            # exclusive
+            if self.row_start >= self.row_end:
+                QMessageBox.warning(
+                    self, 'Invalid Range',
+                    'Start Row must be less than End Row.'
+                )
+                return
+        self.accept()
+
+
+class ZoomableChartWidget(QScrollArea):
+    """A horizontally scrollable container for wide charts with zoom support.
+
+    Ctrl+MouseWheel zooms 0.5×–3.0×. Zoom buttons (+/−/Reset) above the chart.
+    """
+
+    def __init__(self, pixmap, parent=None):
+        super().__init__(parent)
+        from PyQt5.QtGui import QPixmap
+
+        self._original_pixmap = pixmap
+        self._zoom = 1.0
+
+        self.setWidgetResizable(False)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setMinimumHeight(250)
+
+        # Inner container
+        container = QWidget()
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Zoom buttons
+        btn_bar = QWidget()
+        btn_layout = QHBoxLayout(btn_bar)
+        btn_layout.setContentsMargins(4, 2, 4, 2)
+
+        zoom_in = QPushButton('+')
+        zoom_in.setFixedSize(28, 28)
+        zoom_in.clicked.connect(lambda: self._set_zoom(self._zoom + 0.25))
+
+        zoom_out = QPushButton('−')
+        zoom_out.setFixedSize(28, 28)
+        zoom_out.clicked.connect(lambda: self._set_zoom(self._zoom - 0.25))
+
+        zoom_reset = QPushButton('Reset')
+        zoom_reset.setFixedSize(60, 28)
+        zoom_reset.clicked.connect(lambda: self._set_zoom(1.0))
+
+        self._zoom_label = QLabel('100%')
+
+        btn_layout.addWidget(zoom_out)
+        btn_layout.addWidget(zoom_in)
+        btn_layout.addWidget(zoom_reset)
+        btn_layout.addWidget(self._zoom_label)
+        btn_layout.addStretch()
+
+        container_layout.addWidget(btn_bar)
+
+        # Image label
+        self._img_label = QLabel()
+        self._img_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        container_layout.addWidget(self._img_label)
+
+        self.setWidget(container)
+        self._apply_zoom()
+
+    def _set_zoom(self, new_zoom: float):
+        self._zoom = max(0.5, min(new_zoom, 3.0))
+        self._apply_zoom()
+
+    def _apply_zoom(self):
+        from PyQt5.QtCore import QSize
+        scaled = self._original_pixmap.scaled(
+            QSize(
+                int(self._original_pixmap.width() * self._zoom),
+                int(self._original_pixmap.height() * self._zoom),
+            ),
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
+        )
+        self._img_label.setPixmap(scaled)
+        self._img_label.adjustSize()
+        self.widget().adjustSize()
+        self._zoom_label.setText(f'{int(self._zoom * 100)}%')
+
+    def wheelEvent(self, event):
+        if event.modifiers() & Qt.ControlModifier:
+            delta = event.angleDelta().y()
+            step = 0.1 if delta > 0 else -0.1
+            self._set_zoom(self._zoom + step)
+            event.accept()
+        else:
+            super().wheelEvent(event)
 
 
 class AnalysisPanel(QWidget):
@@ -464,21 +665,37 @@ class AnalysisPanel(QWidget):
         if df is None:
             return
 
-        if len(df) > 10000:
-            reply = QMessageBox.question(
-                self, 'Generate Charts',
-                f'This dataset has {len(df):,} rows. Generating interactive charts '
-                'may take several seconds. Do you want to proceed?',
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes
-            )
-            if reply != QMessageBox.Yes:
+        chart_mode = 'auto'
+        row_start = None
+        row_end = None
+
+        # Load threshold from config
+        try:
+            from core.config_manager import load_settings
+            threshold = load_settings().get('charts', {}).get(
+                'large_dataset_threshold', 5000)
+        except Exception:
+            threshold = 5000
+
+        if len(df) > threshold:
+            dialog = LargeDatasetChartDialog(len(df), self)
+            if dialog.exec_() != QDialog.Accepted:
                 return
+            chart_mode = dialog.chart_mode
+            row_start = dialog.row_start
+            row_end = dialog.row_end
 
         self.generate_charts_btn.setEnabled(False)
         self.generate_charts_btn.hide()
         self.graphs_msg_label.setText('Generating charts... Please wait.')
 
-        self._chart_worker = ChartWorker(self.analysis_results)
+        self._active_chart_mode = chart_mode
+        self._chart_worker = ChartWorker(
+            self.analysis_results,
+            chart_mode=chart_mode,
+            row_start=row_start,
+            row_end=row_end,
+        )
         self._chart_worker.finished.connect(self._on_charts_finished)
         self._chart_worker.error.connect(self._on_charts_error)
         self._chart_worker.start()
@@ -668,22 +885,30 @@ class AnalysisPanel(QWidget):
 
         from PyQt5.QtGui import QPixmap
 
+        # Determine if we should use scrollable/zoomable containers
+        use_zoomable = getattr(self, '_active_chart_mode', 'auto') == 'full'
+
         for name, data in chart_bytes.items():
             pixmap = QPixmap()
             pixmap.loadFromData(data)
             
-            # Create a label for the image
-            img_label = QLabel()
-            img_label.setPixmap(pixmap)
-            img_label.setAlignment(Qt.AlignCenter)
-            
             # Create a title label
             title_label = QLabel(f'<b>{name}</b>')
             title_label.setAlignment(Qt.AlignCenter)
-            
-            # Add to layout with some spacing
             self.graphs_layout.addWidget(title_label)
-            self.graphs_layout.addWidget(img_label)
+
+            if use_zoomable and name.startswith('trend_'):
+                # Full-resolution mode: scrollable + zoomable container
+                zoom_widget = ZoomableChartWidget(pixmap)
+                zoom_widget.setMinimumHeight(350)
+                self.graphs_layout.addWidget(zoom_widget)
+            else:
+                # Standard mode: static image
+                img_label = QLabel()
+                img_label.setPixmap(pixmap)
+                img_label.setAlignment(Qt.AlignCenter)
+                self.graphs_layout.addWidget(img_label)
+
             self.graphs_layout.addSpacing(20)
             
         self.graphs_stack.setCurrentWidget(self.graphs_scroll)

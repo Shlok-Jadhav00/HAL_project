@@ -40,5 +40,12 @@
                    "include_charts_by_default":  true,
                    "page_size":  "A4",
                    "margin_cm":  2
+               },
+    "charts":  {
+                   "large_dataset_threshold":  5000,
+                   "full_resolution_max_width_px":  20000,
+                   "downsampling_points_per_pixel":  2,
+                   "downsampling_max_points":  5000,
+                   "downsampling_min_points":  500
                }
 }

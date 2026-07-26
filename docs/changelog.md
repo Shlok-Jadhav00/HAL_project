@@ -189,3 +189,23 @@ closes every gap found.
 ### Status
 - ✅ Phase 4 — Testing: DONE
 - ✅ Phase 5 — Packaging & Deployment: DONE (re-compiled executable passed testing)
+
+---
+
+## [2026-07-26] Adaptive Chart Generation for Large Datasets
+
+### Added / Modified
+| File | Change | FR/NFR |
+|---|---|---|
+| `core/chart_builder.py` | [MODIFIED] Added pure NumPy downsampling algorithms (LTTB and Min/Max bucket) and rewrote `generate_trend_chart` for adaptive scaling | FR-066, NFR-008 |
+| `gui/analysis_panel.py` | [MODIFIED] Added `LargeDatasetChartDialog` for pre-chart rendering choices and `ZoomableChartWidget` for interactive panning/zooming of wide charts | FR-066, NFR-010 |
+| `gui/report_panel.py` | [MODIFIED] Set PDF charts to strictly use `auto` adaptive mode | FR-071 |
+| `config/settings.json` | [MODIFIED] Added `charts` object to manage configurable thresholds, point limits, and dynamic scaling | NFR-011 |
+
+### Decisions Made
+- Added a 3-tier adaptive downsampling system to protect CPU memory: datasets under 5k rows render normally, 5k-20k rows use fast Min/Max buckets, and 20k+ rows use LTTB (Largest Triangle Three Bucket) algorithm to preserve visual peaks.
+- Ensured anomaly data points are strictly preserved through the downsampling process by force-injecting them back into the plotted coordinates.
+- Added a full-resolution mode (capped at 20,000 pixels wide) mounted inside a horizontally scrollable container with `Ctrl+Wheel` zooming.
+
+### Status
+- ✅ Phase 4 — Testing: DONE (Core tests passing, visual and GUI testing verified)
